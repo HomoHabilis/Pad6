@@ -16,10 +16,12 @@ files built from several sources at once, **time-stretching that changes
 length without moving pitch**, and a **wavetable synthesizer** that turns a
 pad into 255 waveforms you step through with the START knob.
 
-> **Windows users:** a prebuilt **Windows x64 executable** is available,
-> built with PyInstaller and bundling **all dependencies, including
-> ffmpeg/ffprobe**. No Python installation, pip packages, or separate
-> ffmpeg setup are required - just download and run. See Section 2.1.
+> **Ready-made downloads** for **Windows x64, macOS (Apple Silicon and
+> Intel) and Linux x64** are on the
+> [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest),
+> each bundling **all dependencies, including ffmpeg/ffprobe**. No Python
+> installation, pip packages, or separate ffmpeg setup are required - just
+> download and run. See Section 2.1.
 
 If it saves you time, there is a Ko-fi link under **Settings → Donate**:
 [ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack). The app is free and
@@ -157,15 +159,15 @@ travel in packs too, and everything travels inside presets as well.
 
 - Windows, Linux (tested on Ubuntu/Debian-based distributions), or macOS
 - Python 3.10 or newer (3.13+ requires one extra package, see 2.2.2) -
-  **not needed if you use the prebuilt Windows executable**
+  **not needed if you use a prebuilt download from the Releases page**
 - A working audio output device
 - ffmpeg (required for MP3 support, pitch/rate/mono conversion, time
   stretching and the Chop feature; WAV-only workflows can run without it,
   with reduced functionality)
-  - **already bundled** in the prebuilt Windows executable
+  - **already bundled** in the prebuilt downloads
 - `tkinterdnd2` (optional) - only needed for dropping files from the file
   manager onto a pad. Everything else works without it. Also bundled in the
-  prebuilt Windows executable.
+  prebuilt downloads.
 
 ### 1.1 Tested configuration
 
@@ -231,17 +233,36 @@ than 8.6.15 the Synth dialog can come up with its family lists unpainted;
 
 ## 2. Installation (Windows)
 
-### 2.1 Option A: Prebuilt Windows x64 Executable (recommended, no setup)
+### 2.1 Option A: Prebuilt download (recommended, no setup)
 
-A standalone `.exe` is provided for 64-bit Windows. It is built with
-PyInstaller in `--onefile` mode and has **every dependency bundled inside
-it**, including Python itself, pydub, sounddevice/soundfile, and
-**ffmpeg.exe / ffprobe.exe**. There is nothing else to install.
+Every release on the
+[Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
+has one download per platform, built automatically by GitHub Actions
+(see Section 7) with **every dependency bundled inside**, including Python
+itself, pydub, sounddevice/soundfile, and **ffmpeg / ffprobe**:
 
-1. Download the `.exe`.
-2. Double-click to run it - no Python, pip, or ffmpeg setup required.
-3. Windows SmartScreen or your antivirus may flag an unsigned executable on
-   first run; choose "Run anyway" / allow it if you trust the source.
+| Download | For |
+|---|---|
+| `PyP6-vX.Y.Z-windows-x64.zip` | Windows 10/11, 64-bit |
+| `PyP6-vX.Y.Z-macos-arm64.zip` | Macs with Apple Silicon (M1 and later) |
+| `PyP6-vX.Y.Z-macos-x64.zip` | Intel Macs |
+| `PyP6-vX.Y.Z-linux-x64.tar.gz` | 64-bit Linux |
+
+**Windows:** unzip and double-click `PyP6.exe`. SmartScreen or your
+antivirus may flag an unsigned executable on first run; choose "Run
+anyway" / allow it if you trust the source.
+
+**macOS:** unzip and move `PyP6.app` to Applications. The app is not
+signed with an Apple developer certificate, so the first launch is blocked:
+right-click the app, choose **Open**, then **Open** again (on macOS 15 and
+later: try to open it once, then allow it under System Settings → Privacy
+& Security → "Open Anyway"). Alternatively, in Terminal:
+`xattr -dr com.apple.quarantine /Applications/PyP6.app`.
+
+**Linux:** unpack and run `./PyP6`. Audio playback needs the PortAudio
+library from your distribution (`sudo apt install libportaudio2` on
+Debian/Ubuntu, `sudo dnf install portaudio` on Fedora); everything else is
+inside the file.
 
 ### 2.2 Option B: Run from Source
 
@@ -751,7 +772,34 @@ the Length unit stays available.
 
 ---
 
-## 7. Building Your Own Standalone Windows Executable (Optional)
+## 7. Releases and Building Your Own Executable
+
+### 7.1 How releases are made
+
+Releases are built by the GitHub Actions workflow in
+`.github/workflows/release.yml` - free for a public repository. To publish
+one:
+
+1. Set `APP_VERSION` in the script to the new version, e.g. `4.2.4`, and
+   commit it.
+2. Tag that commit and push the tag:
+
+   ```
+   git tag v4.2.4
+   git push origin v4.2.4
+   ```
+
+The workflow builds Windows x64, macOS arm64, macOS x64 and Linux x64 in
+parallel, bundles ffmpeg/ffprobe into each, checks that every build
+starts, and creates the release with all four downloads attached and
+release notes generated from the commits. A tag that does not match
+`APP_VERSION` stops the build before anything is published.
+
+Pushes and pull requests that change the script or the workflow run the
+same builds without publishing - the downloads are kept for a week under
+the run's **Artifacts** on the Actions tab, handy for testing a change.
+
+### 7.2 Building it yourself (Windows)
 
 ```
 pip install pyinstaller
