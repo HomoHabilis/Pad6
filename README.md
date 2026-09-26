@@ -494,9 +494,16 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   the app; `M` marks a part the pattern mutes.
 - **Click a pad's waveform** (or play it) to go the other way: every pattern
   that plays that pad is marked green. Double-click the waveform to open the
-  editor.
+  editor. Clicking an empty pad selects it too, and makes its bank the
+  current one.
 - **Drag a pattern** onto another slot to swap the two; dropping on an empty
   slot moves it. No Drag mode is needed for patterns.
+- **Clear** empties the selected pattern the way the P-6's own clear does:
+  every note, granular note and knob motion goes, while tempo, length,
+  shuffle, FX and the granular sound stay. It remains a real pattern file,
+  so saving it to the P-6 overwrites that slot on the device - a slot with
+  no file (dashed outline) would be left alone by a restore. Clearing a
+  slot that has no file creates an empty pattern for it. Ctrl+Z undoes it.
 - **Sync patterns with pad moves** - when ticked, swapping two pads (in any
   view), swapping two banks, or moving a bank rewrites every loaded pattern
   so it keeps playing the same samples at their new addresses: the notes,

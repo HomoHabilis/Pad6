@@ -27422,6 +27422,10 @@ class CompactSlot:
 
     def _show_if_loaded(self):
         if not self._filled:
+            # Nothing to show, but the click still means "this one": the
+            # pad's bank becomes the current bank and the pad gets the
+            # frame, the same as clicking a loaded pad does.
+            self.app.select_overview_pad(self.bank, self.pad)
             return
         self._act("show_in_main_view")
 
@@ -27964,6 +27968,34 @@ class P6Pattern:
         pads.discard(None)
         return pads
 
+    def cleared(self):
+        """A copy with an empty sequence - what the P-6's own clear does.
+
+        Every note, granular note and motion step is replaced by the empty
+        line the device itself writes; tempo, length, shuffle, FX, the
+        granular sound and the part mutes are kept, exactly as on the
+        device. The result is still a real file, so restoring it overwrites
+        the slot on the P-6 - unlike a slot with no file, which a restore
+        leaves alone."""
+        blank = _blank_steps()
+        out = []
+        for line in self.text.splitlines(keepends=True):
+            body = line.rstrip("\r\n")
+            ending = line[len(body):]
+            m = _PATTERN_LINE_RE.match(body)
+            if m:
+                key = m.group(1).strip()
+                if key in blank and m.group(3) != blank[key]:
+                    line = f"{m.group(1)}{m.group(2)}{blank[key]}{ending}"
+            out.append(line)
+        text = "".join(out)
+        return self if text == self.text else P6Pattern(text, source_path=self.source_path)
+
+    @classmethod
+    def blank(cls):
+        """A whole empty pattern, for a slot that has none to clear."""
+        return cls(blank_pattern_text())
+
     def remap_parts(self, mapping):
         """A copy with every pad reference moved through `mapping`
         ({old_part: new_part}, applied all at once so a swap is two entries).
@@ -28061,6 +28093,61 @@ def find_pattern_files(folder):
         if found:
             return sub, found
     return folder, {}
+
+
+# A pattern as the P-6 leaves it after its own "clear all" (a
+# P6_PTN1-07.PRM from a real device). Clearing on the device empties the
+# sequence and nothing else: that file came back byte-identical to the one
+# before the clear, tempo, length, shuffle, FX and granular sound included.
+# So its step lines are what "empty" looks like, and the whole file only
+# stands in for a slot that has no pattern of its own to keep settings from.
+_BLANK_PATTERN_XZ = (
+    "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"
+)
+_STEP_PREFIXES = ("STEP_NOTE_SMPL ", "STEP_NOTE_GRNL ", "STEP_MOTION ")
+_blank_step_values = None
+
+
+def blank_pattern_text():
+    return lzma.decompress(base64.b64decode(_BLANK_PATTERN_XZ)).decode("ascii")
+
+
+def _blank_steps():
+    """{step key: value} for every step line of the cleared pattern."""
+    global _blank_step_values
+    if _blank_step_values is None:
+        values = {}
+        for line in blank_pattern_text().splitlines():
+            m = _PATTERN_LINE_RE.match(line)
+            if m and m.group(1).strip().startswith(_STEP_PREFIXES):
+                values[m.group(1).strip()] = m.group(3)
+        _blank_step_values = values
+    return _blank_step_values
 
 
 def remap_patterns(patterns, mapping):
@@ -28227,7 +28314,8 @@ class PatternStrip:
     def _tip_text(slot, pat):
         label = f"Pattern {pattern_slot_label(slot)}"
         if pat is None:
-            return f"{label}\nNo file loaded for this slot."
+            return (f"{label}\nNo file for this slot - a restore leaves the P-6's "
+                    f"pattern there as it is. Clear makes an empty one.")
         if pat.is_empty:
             return f"{label}\nEmpty pattern."
         pads = " ".join(sorted(f"{b}{p}" for b, p in pat.used_pads()))
@@ -31161,6 +31249,17 @@ class P6ManagerApp:
         self._save_active_bank_state()
         self.refresh_overview()
 
+    def select_overview_pad(self, bank, pad):
+        """Makes (bank, pad) the current bank and framed pad without showing
+        anything - for an empty pad, which has no sample to put in the
+        waveform area. A loaded pad goes through show_in_main_view()
+        instead, which does both of these on its own."""
+        if bank != self.current_bank.get() or bank != self._active_bank:
+            self.current_bank.set(bank)
+            self.switch_bank(bank)
+        self.set_active_pad(pad)
+        self.refresh_overview()
+
     def toggle_drag_mode(self):
         """Arms or disarms dragging in the overview."""
         self.drag_mode = not self.drag_mode
@@ -31276,6 +31375,16 @@ class P6ManagerApp:
             bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=64, height=24, radius=7,
             font=ui_font(8, "bold"), state="disabled")
         self.pattern_save_btn.pack(side="left", padx=(4, 0))
+        self.pattern_clear_btn = RoundedButton(
+            head, text="Clear", command=self.clear_selected_pattern,
+            bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=64, height=24, radius=7,
+            font=ui_font(8, "bold"), state="disabled")
+        self.pattern_clear_btn.pack(side="left", padx=(4, 0))
+        add_tooltip(self.pattern_clear_btn,
+                    "Empty the selected pattern the way the P-6's own clear does: "
+                    "all notes, granular notes and knob motion go, tempo, length, "
+                    "FX and sound settings stay. It stays a real pattern file, so "
+                    "saving it to the P-6 overwrites the slot there. Ctrl+Z undoes it.")
         add_tooltip(self.pattern_save_btn,
                     "Write the patterns, in their new order and with their new pad "
                     "numbers, into the P-6's RESTORE folder when it is mounted (then "
@@ -31330,6 +31439,8 @@ class P6ManagerApp:
         self.pattern_strip.redraw()
         self.pattern_info.redraw()
         self.pattern_save_btn.config_state("normal" if self.patterns else "disabled")
+        self.pattern_clear_btn.config_state(
+            "normal" if self.patterns and self.selected_pattern else "disabled")
         if self.pattern_source_dir:
             count = sum(1 for p in self.patterns.values() if p is not None)
             self.pattern_source_label.config(
@@ -31375,6 +31486,27 @@ class P6ManagerApp:
         self.selected_pattern = slot
         self._pattern_focus = "pattern"
         self._refresh_pattern_links()
+
+    def clear_selected_pattern(self):
+        slot = self.selected_pattern
+        if slot is None:
+            return
+        pat = self.patterns.get(slot)
+        new = pat.cleared() if pat is not None else P6Pattern.blank()
+        label = pattern_slot_label(slot)
+        if new is pat:
+            self.show_status(f"Pattern {label} is already empty.", kind="info")
+            return
+        self._push_undo()
+        self.patterns[slot] = new
+        self._patterns_dirty = True
+        self._pattern_focus = "pattern"
+        self._refresh_pattern_links()
+        if pat is None:
+            self.show_status(f"Created an empty pattern in {label}.")
+        else:
+            self.show_status(f"Cleared pattern {label}; its tempo, length and "
+                             f"sound settings are kept.")
 
     def swap_patterns(self, slot_a, slot_b):
         """Swaps two pattern slots. An empty slot is just a slot with
