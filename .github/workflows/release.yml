@@ -117,10 +117,12 @@ jobs:
               curl -fsSL -o ffdl/ff.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl-shared.tar.xz
               tar -xJf ffdl/ff.tar.xz -C ffdl
               cp ffdl/*/bin/ffmpeg ffdl/*/bin/ffprobe ffbin/
-              # -L: the sonames are symlinks; the bundle needs real files
-              # under the names the binaries ask for.
+              # Only the soname (libavcodec.so.63), which is what the
+              # binaries ask for - the fully versioned file next to it is the
+              # same library, and copying both bundled every one twice.
+              # -L: the soname is a symlink; the bundle needs the real file.
               for lib in ffdl/*/lib/*.so.*; do
-                cp -L "$lib" ffbin/
+                if [[ "$lib" =~ \.so\.[0-9]+$ ]]; then cp -L "$lib" ffbin/; fi
               done
               # Mirrors the frozen app, where the libraries sit next to the
               # binaries and PyInstaller's bootloader puts that folder on
