@@ -28423,6 +28423,180 @@ def _canvas_round_fill(c, x1, y1, x2, y2, r, color):
         c.create_oval(x, y, x + 2 * r, y + 2 * r, fill=color, outline="")
 
 
+class PatternDeviceDialog(tk.Toplevel):
+    """Load or save patterns: the P-6's own procedure, then where to go.
+
+    The same shape as the sample import dialog - an "On the P-6 itself"
+    panel first, because the dialog is opened BEFORE the device is powered
+    up in storage mode, so the search for its drive keeps repeating until
+    the drive appears or the dialog closes.
+
+    kind is "BACKUP" (loading) or "RESTORE" (saving), the two folders the
+    Owner's Manual names. result: "device", "folder" or None; device_dir is
+    the folder found on the P-6.
+    """
+
+    SCAN_MS = 1500
+
+    STEPS = {
+        "BACKUP": (
+            "1. Connect the P-6 via USB and turn it off.\n"
+            "2. Hold [\u25cf] (REC) and turn the power on.\n"
+            "3. The P-6 writes its patterns to the BACKUP folder; the step "
+            "buttons show the progress. Many patterns can take a few minutes.\n"
+            "4. The P-6 drive is picked up here by itself. Click "
+            "\u201cFrom the P-6\u201d."),
+        "RESTORE": (
+            "1. Connect the P-6 via USB and turn it off.\n"
+            "2. Hold [\u25cf] (REC) and turn the power on.\n"
+            "3. Click \u201cTo the P-6\u201d: the patterns are copied into its "
+            "RESTORE folder.\n"
+            "4. Eject the P-6 drive, then press [KYBD] on the P-6. The step "
+            "buttons show the progress; it can take around five minutes."),
+    }
+
+    def __init__(self, parent, kind):
+        super().__init__(parent)
+        self.kind = kind
+        self.result = None
+        self.device_dir = None
+        self._scan_job = None
+        self._queue = None
+        self._closed = False
+        loading = kind == "BACKUP"
+        self.title("Load Patterns" if loading else "Save Patterns")
+        style_toplevel(self)
+        self.resizable(False, False)
+
+        outer = tk.Frame(self, bg=BG_DARK, padx=18, pady=16)
+        outer.pack(fill="both", expand=True)
+
+        steps_panel = RoundedPanel(outer, title="On the P-6 itself", parent_bg=BG_DARK,
+                                   panel_bg=BG_PANEL, border=BORDER_LIGHT, radius=14,
+                                   title_fg=ACCENT_BLUE, body_pady=(22, 12))
+        steps_panel.pack(fill="x", pady=(0, 12))
+        steps_row = tk.Frame(steps_panel.body, bg=BG_PANEL)
+        steps_row.pack(fill="x")
+        steps = tk.Label(steps_row, text=self.STEPS[kind], anchor="nw", justify="left",
+                         wraplength=sc(430))
+        style_label(steps, bg=BG_PANEL, font=ui_font(9))
+        steps.pack(side="left", fill="x", expand=True, anchor="n", pady=(6, 0))
+        self._icon = make_device_icon("to_app" if loading else "to_device",
+                                      DEVICE_ICON_FG)
+        if self._icon is not None:
+            # Reference kept on self: Tk does not own its images.
+            tk.Label(steps_row, image=self._icon, bg=BG_PANEL, bd=0,
+                     highlightthickness=0).pack(side="right", anchor="n", padx=(16, 0))
+
+        folder_panel = RoundedPanel(outer, title=f"P-6 {kind} Folder", parent_bg=BG_DARK,
+                                    panel_bg=BG_PANEL, border=BORDER_LIGHT, radius=14,
+                                    title_fg=ACCENT_BLUE)
+        folder_panel.pack(fill="x", pady=(0, 12))
+        # Two lines, always: the dialog is sized once when it opens, and a
+        # label that grows a line when the drive shows up pushed the buttons
+        # off the bottom edge.
+        self.found_label = tk.Label(folder_panel.body, text="", anchor="nw", justify="left",
+                                    wraplength=sc(520), height=2)
+        style_label(self.found_label, bg=BG_PANEL, fg=FG_MUTED, font=ui_font(8))
+        self.found_label.pack(fill="x", pady=(6, 0))
+
+        btn_row = tk.Frame(outer, bg=BG_DARK)
+        btn_row.pack(fill="x")
+        cancel_btn = RoundedButton(btn_row, text="Cancel", command=self._cancel,
+                                   bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=90)
+        cancel_btn.pack(side="right", padx=4)
+        self.device_btn = RoundedButton(
+            btn_row, text="From the P-6" if loading else "To the P-6",
+            command=self._use_device, bg=BTN_GREEN, fg="#FFFFFF", parent_bg=BG_DARK,
+            width=120, state="disabled")
+        self.device_btn.pack(side="right", padx=4)
+        folder_btn = RoundedButton(btn_row, text="A folder on this computer\u2026",
+                                   command=self._use_folder, bg=BG_INPUT, fg=FG_TEXT,
+                                   parent_bg=BG_DARK, width=200)
+        folder_btn.pack(side="left", padx=(0, 4))
+
+        self._set_found(None)
+        self.protocol("WM_DELETE_WINDOW", self._cancel)
+        self.transient(parent)
+        self.update_idletasks()
+        center_toplevel_on_parent(self, parent)
+        self._safe_grab()
+        self._scan()
+
+    def _set_found(self, path):
+        self.device_dir = path
+        if path:
+            # Shortened from the front: the end (.../P-6/RESTORE) is the part
+            # that says it is the right folder.
+            shown = path if len(path) <= 80 else "\u2026" + path[-79:]
+            self.found_label.config(text=f"Found: {shown}", fg=ACCENT_GREEN)
+            self.device_btn.config_state("normal")
+        else:
+            self.found_label.config(
+                text=f"Waiting for the P-6 drive and its {self.kind} folder \u2026 "
+                     f"it is picked up here as soon as it appears.", fg=FG_MUTED)
+            self.device_btn.config_state("disabled")
+
+    def _scan(self):
+        """One search off the main thread, then the next one - the same
+        queue-and-poll hand-back as the IMPORT detection, never Tk from the
+        worker. Keeps going after a hit too, so a drive that is ejected
+        again does not stay offered."""
+        if self._closed:
+            return
+        self._queue = queue.Queue()
+        q = self._queue
+        threading.Thread(target=lambda: q.put(guess_p6_pattern_dir(self.kind)),
+                         daemon=True).start()
+        self._scan_job = self.after(50, lambda: self._poll(q))
+
+    def _poll(self, q):
+        if self._closed:
+            return
+        try:
+            found = q.get_nowait()
+        except queue.Empty:
+            self._scan_job = self.after(100, lambda: self._poll(q))
+            return
+        if found != self.device_dir:
+            self._set_found(found)
+        self._scan_job = self.after(self.SCAN_MS, self._scan)
+
+    def _safe_grab(self, attempt=0):
+        try:
+            self.update_idletasks()
+            self.grab_set()
+        except tk.TclError:
+            if attempt < 20:
+                self.after(50, lambda: self._safe_grab(attempt + 1))
+            return
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def _close(self):
+        self._closed = True
+        if self._scan_job is not None:
+            try:
+                self.after_cancel(self._scan_job)
+            except tk.TclError:
+                pass
+        self.destroy()
+
+    def _use_device(self):
+        if self.device_dir and os.path.isdir(self.device_dir):
+            self.result = "device"
+            self._close()
+
+    def _use_folder(self):
+        self.result = "folder"
+        self._close()
+
+    def _cancel(self):
+        self.result = None
+        self._close()
+
+
 class P6ManagerApp:
     def __init__(self, root):
         global _DND_APP
@@ -31264,64 +31438,22 @@ class P6ManagerApp:
         self.show_status("Pad moves now update the patterns." if on else
                          "Pad moves no longer touch the patterns.", kind="info")
 
-    def _find_p6_pattern_dir_async(self, kind, on_done):
-        """guess_p6_pattern_dir() off the main thread - it globs the same
-        mount points as the IMPORT detection, and a stale automount there can
-        block for seconds. Same queue-and-poll hand-back as
-        _resolve_import_root_async, never Tk from the worker."""
-        result_queue = queue.Queue()
-        threading.Thread(target=lambda: result_queue.put(guess_p6_pattern_dir(kind)),
-                         daemon=True).start()
-        self.show_progress("Looking for the P-6 \u2026")
-
-        def poll():
-            try:
-                found = result_queue.get_nowait()
-            except queue.Empty:
-                self.root.after(50, poll)
-                return
-            self.show_status("")
-            on_done(found)
-
-        self.root.after(50, poll)
-
-    def _ask_device_or_folder(self, title, prompt, device_label):
-        """"device" or "folder" or None, for a found P-6 folder."""
-        options = [device_label, "A folder on this computer\u2026"]
-        choice = dark_ask_choice(self.root, title, prompt, options, initial=options[0])
-        if choice is None:
-            return None
-        return "device" if choice == options[0] else "folder"
-
     def load_patterns_dialog(self):
-        self._find_p6_pattern_dir_async("BACKUP", self._load_patterns_with_backup)
-
-    def _load_patterns_with_backup(self, backup_dir):
-        if backup_dir:
-            how = self._ask_device_or_folder(
-                "Load Patterns",
-                "Where should the patterns come from?",
-                f"The P-6 (BACKUP folder: {backup_dir})")
-            if how is None:
-                return
-            if how == "device":
-                self.load_patterns_from_folder(backup_dir)
-                return
-        cfg = load_config()
-        initial = cfg.get("last_pattern_dir")
-        if not (initial and os.path.isdir(initial)):
-            initial = os.path.expanduser("~")
-        picker = FolderPickerDialog(self.root, initial_dir=initial,
-                                    title="Select a Folder of P-6 Patterns")
-        self.root.wait_window(picker)
-        if picker.selected_dir:
-            save_config_value("last_pattern_dir", picker.selected_dir)
-            self.load_patterns_from_folder(picker.selected_dir)
-        elif not backup_dir:
-            self.show_status("No P-6 BACKUP folder found. To read patterns off the "
-                             "device, start it in backup mode (Owner's Manual: "
-                             "\u201cBacking up the patterns\u201d).", kind="info",
-                             duration_ms=9000)
+        dlg = PatternDeviceDialog(self.root, "BACKUP")
+        self.root.wait_window(dlg)
+        if dlg.result == "device":
+            self.load_patterns_from_folder(dlg.device_dir)
+        elif dlg.result == "folder":
+            cfg = load_config()
+            initial = cfg.get("last_pattern_dir")
+            if not (initial and os.path.isdir(initial)):
+                initial = os.path.expanduser("~")
+            picker = FolderPickerDialog(self.root, initial_dir=initial,
+                                        title="Select a Folder of P-6 Patterns")
+            self.root.wait_window(picker)
+            if picker.selected_dir:
+                save_config_value("last_pattern_dir", picker.selected_dir)
+                self.load_patterns_from_folder(picker.selected_dir)
 
     def load_patterns_from_folder(self, folder):
         if self._patterns_dirty and self.patterns and not dark_askyesno(
@@ -31359,19 +31491,13 @@ class P6ManagerApp:
     def save_patterns_dialog(self):
         if not self.patterns:
             return
-        self._find_p6_pattern_dir_async("RESTORE", self._save_patterns_with_restore)
-
-    def _save_patterns_with_restore(self, restore_dir):
-        if restore_dir:
-            how = self._ask_device_or_folder(
-                "Save Patterns",
-                "Where should the patterns go?",
-                f"The P-6 (RESTORE folder: {restore_dir})")
-            if how is None:
-                return
-            if how == "device":
-                self.save_patterns_to_folder(restore_dir, to_device=True)
-                return
+        dlg = PatternDeviceDialog(self.root, "RESTORE")
+        self.root.wait_window(dlg)
+        if dlg.result == "device":
+            self.save_patterns_to_folder(dlg.device_dir, to_device=True)
+            return
+        if dlg.result != "folder":
+            return
         cfg = load_config()
         initial = cfg.get("last_pattern_save_dir")
         if not (initial and os.path.isdir(initial)):

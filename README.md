@@ -460,11 +460,12 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
 (4 banks of 16) in a strip underneath.
 
 - **Load...** reads the pattern files (`P6_PTN1-01.PRM` ... `P6_PTN4-16.PRM`).
-  When the P-6 is mounted in pattern backup mode (Owner's Manual: "Backing
-  up the patterns to your computer") its `BACKUP` folder is found by
-  itself and offered first; you can always pick a folder on your computer
-  instead. Picking the folder above `BACKUP` works too. The files you load
-  from are never changed.
+  The dialog lists the steps on the P-6 itself - connect it via USB with
+  the power off, hold **[●] (REC)** and switch it on, and wait while the
+  step buttons show it writing its patterns to the `BACKUP` folder - and
+  picks the drive up by itself as soon as it appears. **A folder on this
+  computer...** loads from anywhere else instead; picking the folder above
+  `BACKUP` works too. The files you load from are never changed.
 - **Click a pattern** to select it. Its tempo, length, shuffle, level,
   transpose and scale, its steps and the samples it plays (with how many
   notes each) show in the card on the right, and the pads it plays are
@@ -481,11 +482,12 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   the granular source, the motion targets and the per-part mute/quantize
   settings all follow the pad. One Ctrl+Z undoes the pad move and the
   pattern changes together.
-- **Save...** writes all 64 slots, named for their new slots. With the P-6
-  mounted, its `RESTORE` folder is found and offered first: after saving,
-  eject the P-6 drive and press **[KYBD]** on the P-6 to restore the
-  patterns. Saving to a folder on your computer can also copy the rest of
-  the backup folder alongside them.
+- **Save...** writes all 64 slots, named for their new slots. The same kind
+  of dialog walks through the restore: start the P-6 the same way, click
+  **To the P-6** to copy the patterns into its `RESTORE` folder, then eject
+  the P-6 drive and press **[KYBD]** on the P-6 (the step buttons show the
+  progress; it can take around five minutes). Saving to a folder on your
+  computer can also copy the rest of the backup folder alongside them.
 
 Pattern files number the sample pads 0-47: A1 is 0, A6 is 5, B1 is 6 ... H6
 is 47. Part 48 is the granular part.
