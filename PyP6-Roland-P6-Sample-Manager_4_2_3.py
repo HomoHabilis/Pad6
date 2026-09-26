@@ -28441,7 +28441,7 @@ class PatternDeviceDialog(tk.Toplevel):
     STEPS = {
         "BACKUP": (
             "1. Connect the P-6 via USB and turn it off.\n"
-            "2. Hold [\u25cf] (REC) and turn the power on.\n"
+            "2. Hold [\u25b6] (PLAY) and turn the power on.\n"
             "3. The P-6 writes its patterns to the BACKUP folder; the step "
             "buttons show the progress. Many patterns can take a few minutes.\n"
             "4. The P-6 drive is picked up here by itself. Click "

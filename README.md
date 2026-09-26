@@ -482,7 +482,7 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
 
 - **Load...** reads the pattern files (`P6_PTN1-01.PRM` ... `P6_PTN4-16.PRM`).
   The dialog lists the steps on the P-6 itself - connect it via USB with
-  the power off, hold **[●] (REC)** and switch it on, and wait while the
+  the power off, hold **[▶] (PLAY)** and switch it on, and wait while the
   step buttons show it writing its patterns to the `BACKUP` folder - and
   picks the drive up by itself as soon as it appears. **A folder on this
   computer...** loads from anywhere else instead; picking the folder above
@@ -504,7 +504,8 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   settings all follow the pad. One Ctrl+Z undoes the pad move and the
   pattern changes together.
 - **Save...** writes all 64 slots, named for their new slots. The same kind
-  of dialog walks through the restore: start the P-6 the same way, click
+  of dialog walks through the restore: connect the P-6 with the power off,
+  hold **[●] (REC)** and switch it on, click
   **To the P-6** to copy the patterns into its `RESTORE` folder, then eject
   the P-6 drive and press **[KYBD]** on the P-6 (the step buttons show the
   progress; it can take around five minutes). Saving to a folder on your
