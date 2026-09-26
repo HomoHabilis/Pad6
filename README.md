@@ -16,10 +16,12 @@ files built from several sources at once, **time-stretching that changes
 length without moving pitch**, and a **wavetable synthesizer** that turns a
 pad into 255 waveforms you step through with the START knob.
 
-> **Windows users:** a prebuilt **Windows x64 executable** is available,
-> built with PyInstaller and bundling **all dependencies, including
-> ffmpeg/ffprobe**. No Python installation, pip packages, or separate
-> ffmpeg setup are required - just download and run. See Section 2.1.
+> **Ready-made downloads** for **Windows x64, macOS (Apple Silicon and
+> Intel) and Linux x64** are on the
+> [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest),
+> each bundling **all dependencies, including ffmpeg/ffprobe**. No Python
+> installation, pip packages, or separate ffmpeg setup are required - just
+> download and run. See Section 2.1.
 
 If it saves you time, there is a Ko-fi link under **Settings → Donate**:
 [ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack). The app is free and
@@ -157,15 +159,15 @@ travel in packs too, and everything travels inside presets as well.
 
 - Windows, Linux (tested on Ubuntu/Debian-based distributions), or macOS
 - Python 3.10 or newer (3.13+ requires one extra package, see 2.2.2) -
-  **not needed if you use the prebuilt Windows executable**
+  **not needed if you use a prebuilt download from the Releases page**
 - A working audio output device
 - ffmpeg (required for MP3 support, pitch/rate/mono conversion, time
   stretching and the Chop feature; WAV-only workflows can run without it,
   with reduced functionality)
-  - **already bundled** in the prebuilt Windows executable
+  - **already bundled** in the prebuilt downloads
 - `tkinterdnd2` (optional) - only needed for dropping files from the file
   manager onto a pad. Everything else works without it. Also bundled in the
-  prebuilt Windows executable.
+  prebuilt downloads.
 
 ### 1.1 Tested configuration
 
@@ -231,17 +233,36 @@ than 8.6.15 the Synth dialog can come up with its family lists unpainted;
 
 ## 2. Installation (Windows)
 
-### 2.1 Option A: Prebuilt Windows x64 Executable (recommended, no setup)
+### 2.1 Option A: Prebuilt download (recommended, no setup)
 
-A standalone `.exe` is provided for 64-bit Windows. It is built with
-PyInstaller in `--onefile` mode and has **every dependency bundled inside
-it**, including Python itself, pydub, sounddevice/soundfile, and
-**ffmpeg.exe / ffprobe.exe**. There is nothing else to install.
+Every release on the
+[Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
+has one download per platform, built automatically by GitHub Actions
+(see Section 7) with **every dependency bundled inside**, including Python
+itself, pydub, sounddevice/soundfile, and **ffmpeg / ffprobe**:
 
-1. Download the `.exe`.
-2. Double-click to run it - no Python, pip, or ffmpeg setup required.
-3. Windows SmartScreen or your antivirus may flag an unsigned executable on
-   first run; choose "Run anyway" / allow it if you trust the source.
+| Download | For |
+|---|---|
+| `PyP6-vX.Y.Z-windows-x64.zip` | Windows 10/11, 64-bit |
+| `PyP6-vX.Y.Z-macos-arm64.zip` | Macs with Apple Silicon (M1 and later) |
+| `PyP6-vX.Y.Z-macos-x64.zip` | Intel Macs |
+| `PyP6-vX.Y.Z-linux-x64.tar.gz` | 64-bit Linux |
+
+**Windows:** unzip and double-click `PyP6.exe`. SmartScreen or your
+antivirus may flag an unsigned executable on first run; choose "Run
+anyway" / allow it if you trust the source.
+
+**macOS:** unzip and move `PyP6.app` to Applications. The app is not
+signed with an Apple developer certificate, so the first launch is blocked:
+right-click the app, choose **Open**, then **Open** again (on macOS 15 and
+later: try to open it once, then allow it under System Settings → Privacy
+& Security → "Open Anyway"). Alternatively, in Terminal:
+`xattr -dr com.apple.quarantine /Applications/PyP6.app`.
+
+**Linux:** unpack and run `./PyP6`. Audio playback needs the PortAudio
+library from your distribution (`sudo apt install libportaudio2` on
+Debian/Ubuntu, `sudo dnf install portaudio` on Fedora); everything else is
+inside the file.
 
 ### 2.2 Option B: Run from Source
 
@@ -453,6 +474,53 @@ area below and switches the app to that bank.
 their buttons off so nothing fires by accident, then lets you drag pads onto
 pads, or bank letters onto rows. Everything swaps; nothing is overwritten.
 
+#### All banks + patterns
+
+The third entry in the view dropdown keeps the same 8x6 grid, slimmed down
+to each pad's waveform and its Play button, and adds the P-6's 64 patterns
+(4 banks of 16) in a strip underneath.
+
+- **Load...** reads the pattern files (`P6_PTN1-01.PRM` ... `P6_PTN4-16.PRM`).
+  The dialog lists the steps on the P-6 itself - connect it via USB with
+  the power off, hold **[▶] (PLAY)** and switch it on, and wait while the
+  step buttons show it writing its patterns to the `BACKUP` folder - and
+  picks the drive up by itself as soon as it appears. **A folder on this
+  computer...** loads from anywhere else instead; picking the folder above
+  `BACKUP` works too. The files you load from are never changed.
+- **Click a pattern** to select it. Its tempo, length, shuffle, level,
+  transpose and scale, its steps and the samples it plays (with how many
+  notes each) show in the card on the right, and the pads it plays are
+  marked green in the grid. A sample chip in red is a pad that is empty in
+  the app; `M` marks a part the pattern mutes.
+- **Click a pad's waveform** (or play it) to go the other way: every pattern
+  that plays that pad is marked green. Double-click the waveform to open the
+  editor. Clicking an empty pad selects it too, and makes its bank the
+  current one.
+- **Drag a pattern** onto another slot to swap the two; dropping on an empty
+  slot moves it. No Drag mode is needed for patterns.
+- **Clear** empties the selected pattern the way the P-6's own clear does:
+  every note, granular note and knob motion goes, while tempo, length,
+  shuffle, FX and the granular sound stay. It remains a real pattern file,
+  so saving it to the P-6 overwrites that slot on the device - a slot with
+  no file (dashed outline) would be left alone by a restore. Clearing a
+  slot that has no file creates an empty pattern for it. Ctrl+Z undoes it.
+- **Sync patterns with pad moves** - when ticked, swapping two pads (in any
+  view), swapping two banks, or moving a bank rewrites every loaded pattern
+  so it keeps playing the same samples at their new addresses: the notes,
+  the granular source, the motion targets and the per-part mute/quantize
+  settings all follow the pad. One Ctrl+Z undoes the pad move and the
+  pattern changes together.
+- **Save...** writes all 64 slots, named for their new slots. The same kind
+  of dialog walks through the restore: connect the P-6 with the power off,
+  hold **[●] (REC)** and switch it on, click
+  **To the P-6** to copy the patterns into its `RESTORE` folder, then eject
+  the P-6 drive and press **[KYBD]** on the P-6 (the step buttons show the
+  progress; it can take around five minutes). Saving to a folder on your
+  computer can also copy the rest of the backup folder alongside them.
+
+Pattern files number the sample pads 0-47: A1 is 0, A6 is 5, B1 is 6 ... H6
+is 47. Part 48 is the granular part.
+
 ### 5.7 Playback and removal
 
 "▶" plays the pad's sample exactly as it will sound after export (rate,
@@ -489,6 +557,12 @@ file from the device.
   `.PRM` sidecars, so a preset stays usable after the temp folder is
   cleared. Saving over an existing preset replaces only the banks you
   checked.
+- **Patterns in presets** - the same dialogs have a **Patterns 1-4** row,
+  one tickbox per pattern bank of 16, enabled once patterns are loaded (see
+  5.6). They are stored in the preset's `PATTERNS` folder under the P-6's
+  own file names, and follow the same rules as sample banks: only checked
+  pattern banks are replaced when saving over a preset, and only checked
+  ones are loaded.
 - **Load Preset...** - click a preset folder to see which banks it contains,
   then tick the ones to load. With exactly one bank selected you can load it
   into the *current* bank instead of its original slot; the PHRASE numbers
@@ -706,7 +780,42 @@ the Length unit stays available.
 
 ---
 
-## 7. Building Your Own Standalone Windows Executable (Optional)
+## 7. Releases and Building Your Own Executable
+
+### 7.1 How releases are made
+
+Releases are built by the GitHub Actions workflow in
+`.github/workflows/release.yml` - free for a public repository. To publish
+one:
+
+1. Set `APP_VERSION` in the script to the new version, e.g. `4.2.4`, and
+   commit it.
+2. Tag that commit and push the tag:
+
+   ```
+   git tag v4.2.4
+   git push origin v4.2.4
+   ```
+
+Or, without git: on the repository's **Actions** tab choose **Build &
+Release → Run workflow**, pick the branch (normally `main`) and type the
+tag, e.g. `v4.2.4`. The tag is then created on the commit that was built.
+
+Either way, the workflow builds Windows x64, macOS arm64, macOS x64 and Linux x64 in
+parallel, bundles ffmpeg/ffprobe into each, checks that every build
+starts, and creates the release with all four downloads attached and
+release notes generated from the commits. A tag that does not match
+`APP_VERSION` stops the build before anything is published.
+
+A tag with a suffix - `v4.2.4-rc1`, `v4.2.4-test1` - builds the same way
+but is published as a **pre-release**: handy for trying a build out, and
+it never replaces the "latest" release the download links point to.
+
+Pushes and pull requests that change the script or the workflow run the
+same builds without publishing - the downloads are kept for a week under
+the run's **Artifacts** on the Actions tab, handy for testing a change.
+
+### 7.2 Building it yourself (Windows)
 
 ```
 pip install pyinstaller
