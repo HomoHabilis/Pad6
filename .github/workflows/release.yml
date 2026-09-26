@@ -70,12 +70,15 @@ jobs:
           echo "script=$script" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            # v4.2.4 is a release; v4.2.4-rc1 / v4.2.4-test1 a pre-release
+            # of the same version. Either way the part before the dash has
+            # to be the APP_VERSION the script reports.
             tag="${GITHUB_REF_NAME#v}"
-            if [[ "$tag" != "$version" ]]; then
+            if [[ "${tag%%-*}" != "$version" ]]; then
               echo "::error::Tag v$tag does not match APP_VERSION $version in $script"
               exit 1
             fi
-            echo "label=v$version" >> "$GITHUB_OUTPUT"
+            echo "label=v$tag" >> "$GITHUB_OUTPUT"
           else
             echo "label=v$version-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           fi
@@ -254,7 +257,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -la out
+          # A tag with a suffix (v4.2.4-rc1) is published as a pre-release:
+          # it never becomes "Latest", so the README's download link keeps
+          # pointing at the last real release.
+          extra=()
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then extra=(--prerelease); fi
           gh release create "$GITHUB_REF_NAME" out/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "PyP6 $GITHUB_REF_NAME" \
-            --generate-notes
+            --generate-notes "${extra[@]}"

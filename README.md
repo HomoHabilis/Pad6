@@ -796,6 +796,10 @@ starts, and creates the release with all four downloads attached and
 release notes generated from the commits. A tag that does not match
 `APP_VERSION` stops the build before anything is published.
 
+A tag with a suffix - `v4.2.4-rc1`, `v4.2.4-test1` - builds the same way
+but is published as a **pre-release**: handy for trying a build out, and
+it never replaces the "latest" release the download links point to.
+
 Pushes and pull requests that change the script or the workflow run the
 same builds without publishing - the downloads are kept for a week under
 the run's **Artifacts** on the Actions tab, handy for testing a change.
