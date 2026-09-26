@@ -1,7 +1,9 @@
 name: Build & Release
 
 # Pushing a tag like v4.2.4 builds every platform and publishes a GitHub
-# Release with the four downloads attached. Pushes and pull requests that
+# Release with the four downloads attached. The same can be started from
+# the Actions tab without git: "Run workflow" with a tag name - the tag is
+# then created on the commit that was built. Pushes and pull requests that
 # touch the app or this file only build (and smoke-test) as a check; their
 # downloads are kept as workflow artifacts for a few days.
 #
@@ -22,13 +24,23 @@ on:
       - "pyp6logo.ico"
       - ".github/workflows/release.yml"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create, e.g. v4.2.4 (v4.2.4-rc1 = pre-release). Empty = build only."
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.tag }}
   cancel-in-progress: true
+
+env:
+  # The release tag: the pushed tag, or the one typed into "Run workflow".
+  # Empty for an ordinary build.
+  RELEASE_TAG: ${{ inputs.tag || (startsWith(github.ref, 'refs/tags/v') && github.ref_name || '') }}
 
 jobs:
   build:
@@ -69,11 +81,15 @@ jobs:
           version=$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' "$script")
           echo "script=$script" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ -n "$RELEASE_TAG" ]]; then
+            if [[ "$RELEASE_TAG" != v* ]]; then
+              echo "::error::Release tag must start with v, e.g. v$version"
+              exit 1
+            fi
             # v4.2.4 is a release; v4.2.4-rc1 / v4.2.4-test1 a pre-release
             # of the same version. Either way the part before the dash has
             # to be the APP_VERSION the script reports.
-            tag="${GITHUB_REF_NAME#v}"
+            tag="${RELEASE_TAG#v}"
             if [[ "${tag%%-*}" != "$version" ]]; then
               echo "::error::Tag v$tag does not match APP_VERSION $version in $script"
               exit 1
@@ -243,7 +259,8 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Same condition as RELEASE_TAG being set (a job-level if cannot read env).
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -261,8 +278,12 @@ jobs:
           # it never becomes "Latest", so the README's download link keeps
           # pointing at the last real release.
           extra=()
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then extra=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" out/* \
+          if [[ "$RELEASE_TAG" == *-* ]]; then extra=(--prerelease); fi
+          # --target: for a run started from the Actions tab the tag does
+          # not exist yet and is created on the commit that was just built.
+          # For a pushed tag it already exists and --target is ignored.
+          gh release create "$RELEASE_TAG" out/* \
             --repo "$GITHUB_REPOSITORY" \
-            --title "PyP6 $GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --title "PyP6 $RELEASE_TAG" \
             --generate-notes "${extra[@]}"

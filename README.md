@@ -790,7 +790,11 @@ one:
    git push origin v4.2.4
    ```
 
-The workflow builds Windows x64, macOS arm64, macOS x64 and Linux x64 in
+Or, without git: on the repository's **Actions** tab choose **Build &
+Release → Run workflow**, pick the branch (normally `main`) and type the
+tag, e.g. `v4.2.4`. The tag is then created on the commit that was built.
+
+Either way, the workflow builds Windows x64, macOS arm64, macOS x64 and Linux x64 in
 parallel, bundles ffmpeg/ffprobe into each, checks that every build
 starts, and creates the release with all four downloads attached and
 release notes generated from the commits. A tag that does not match
