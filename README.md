@@ -2,7 +2,7 @@
 
 ![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
 
-**Version 4.2.3** - © 2026 Brian Siemund
+**Version 5.0.0** - © 2026 Brian Siemund
 
 ## Overview
 
@@ -26,6 +26,32 @@ pad into 255 waveforms you step through with the START knob.
 If it saves you time, there is a Ko-fi link under **Settings → Donate**:
 [ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack). The app is free and
 stays free.
+
+---
+
+## What's New in 5.0
+
+### Patterns, next to the samples
+
+A third view, **All banks + patterns**, puts the P-6's 64 patterns (4 banks
+of 16) under the 8x6 sample grid, all on one screen. Click a pattern and the
+pads it plays light up; click a pad and every pattern that plays it lights
+up. A card shows the selected pattern in full - tempo, length, shuffle,
+the samples it uses. Patterns can be **dragged** into a new order and
+**cleared** the way the P-6 itself clears them. See 5.6.
+
+**Sync patterns with pad moves** keeps the patterns playing the right
+samples while you rearrange pads: swap two pads or two banks and every
+pattern's notes follow them.
+
+Patterns come straight **from and to the P-6** - Load and Save walk through
+the device's backup and restore procedures and find the drive by themselves
+- and **presets** can now carry pattern banks alongside the sample banks.
+
+### Windows, macOS and Linux
+
+Every release is built automatically for **Windows x64, macOS (Apple
+Silicon and Intel) and Linux x64**, ffmpeg included - see 2.1.
 
 ---
 
@@ -315,7 +341,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager_4_2_3.py
+python PyP6-Roland-P6-Sample-Manager_5_0_0.py
 ```
 
 ---
@@ -348,7 +374,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager_4_2_3.py
+python3 -u ./PyP6-Roland-P6-Sample-Manager_5_0_0.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -807,6 +833,10 @@ starts, and creates the release with all four downloads attached and
 release notes generated from the commits. A tag that does not match
 `APP_VERSION` stops the build before anything is published.
 
+The release description comes from `.github/release-notes/<tag>.md`
+(e.g. `.github/release-notes/v4.2.4.md`) when that file exists; without
+one, GitHub lists the pull requests merged since the last release.
+
 A tag with a suffix - `v4.2.4-rc1`, `v4.2.4-test1` - builds the same way
 but is published as a **pre-release**: handy for trying a build out, and
 it never replaces the "latest" release the download links point to.
@@ -820,7 +850,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager_4_2_3.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_0_0.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^

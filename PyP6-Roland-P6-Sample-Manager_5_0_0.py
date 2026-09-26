@@ -502,7 +502,7 @@ def warn_pydub_missing_once():
 
 APP_NAME = "PyP6"
 APP_SUBTITLE = "Roland AIRA P-6 Sample Manager"
-APP_VERSION = "4.2.3"
+APP_VERSION = "5.0.0"
 APP_AUTHOR = "Brian Siemund"
 APP_YEAR = "2026"
 APP_URL = "https://github.com/j0kerpack/Roland-P6-sample-manager"
