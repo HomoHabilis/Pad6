@@ -459,9 +459,12 @@ The third entry in the view dropdown keeps the same 8x6 grid, slimmed down
 to each pad's waveform and its Play button, and adds the P-6's 64 patterns
 (4 banks of 16) in a strip underneath.
 
-- **Load...** reads the pattern files (`P6_PTN1-01.PRM` ... `P6_PTN4-16.PRM`)
-  from a backup folder. Picking the folder above it works too; `BACKUP` is
-  looked for one level down. The files you load from are never changed.
+- **Load...** reads the pattern files (`P6_PTN1-01.PRM` ... `P6_PTN4-16.PRM`).
+  When the P-6 is mounted in pattern backup mode (Owner's Manual: "Backing
+  up the patterns to your computer") its `BACKUP` folder is found by
+  itself and offered first; you can always pick a folder on your computer
+  instead. Picking the folder above `BACKUP` works too. The files you load
+  from are never changed.
 - **Click a pattern** to select it. Its tempo, length, shuffle, level,
   transpose and scale, its steps and the samples it plays (with how many
   notes each) show in the card on the right, and the pads it plays are
@@ -478,8 +481,10 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   the granular source, the motion targets and the per-part mute/quantize
   settings all follow the pad. One Ctrl+Z undoes the pad move and the
   pattern changes together.
-- **Save...** writes all 64 slots to another folder (for example the P-6's
-  RESTORE folder), named for their new slots. It can also copy the rest of
+- **Save...** writes all 64 slots, named for their new slots. With the P-6
+  mounted, its `RESTORE` folder is found and offered first: after saving,
+  eject the P-6 drive and press **[KYBD]** on the P-6 to restore the
+  patterns. Saving to a folder on your computer can also copy the rest of
   the backup folder alongside them.
 
 Pattern files number the sample pads 0-47: A1 is 0, A6 is 5, B1 is 6 ... H6
@@ -521,6 +526,12 @@ file from the device.
   `.PRM` sidecars, so a preset stays usable after the temp folder is
   cleared. Saving over an existing preset replaces only the banks you
   checked.
+- **Patterns in presets** - the same dialogs have a **Patterns 1-4** row,
+  one tickbox per pattern bank of 16, enabled once patterns are loaded (see
+  5.6). They are stored in the preset's `PATTERNS` folder under the P-6's
+  own file names, and follow the same rules as sample banks: only checked
+  pattern banks are replaced when saving over a preset, and only checked
+  ones are loaded.
 - **Load Preset...** - click a preset folder to see which banks it contains,
   then tick the ones to load. With exactly one bank selected you can load it
   into the *current* bank instead of its original slot; the PHRASE numbers

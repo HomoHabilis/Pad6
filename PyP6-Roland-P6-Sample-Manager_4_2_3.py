@@ -863,6 +863,32 @@ def guess_default_export_root():
     return None
 
 
+def guess_p6_pattern_dir(kind):
+    """A mounted P-6 pattern folder, or None.
+
+    kind is "BACKUP" or "RESTORE", the two folders the Owner's Manual names:
+    the P-6 writes its patterns (P6_PTN1-01.PRM ... P6_PTN4-16.PRM) into
+    BACKUP, and restores whatever is copied into RESTORE once [KYBD] is
+    pressed after ejecting. A BACKUP folder that actually holds pattern
+    files wins over an empty one, since a stick with an old P-6 folder on it
+    is a plausible thing to have mounted as well.
+    """
+    fallback = None
+    for pattern in _mount_globs():
+        for path in _import_dirs_under(pattern, kind):
+            if not os.path.isdir(path):
+                continue
+            if kind != "BACKUP":
+                return path
+            try:
+                if any(PATTERN_FILE_RE.match(n) for n in os.listdir(path)):
+                    return path
+            except OSError:
+                continue
+            fallback = fallback or path
+    return fallback
+
+
 def _volume_names(path):
     """The volume a given .../IMPORT path sits on, as a set of candidates.
 
@@ -3462,8 +3488,17 @@ def save_config_value(key, value):
 
 
 PRESET_MANIFEST_NAME = "preset.json"
-PRESET_FORMAT_VERSION = 3  # v3: pads can carry wavetable synth state
+PRESET_FORMAT_VERSION = 4  # v4: a preset can carry P-6 patterns
+#     v3: pads can carry wavetable synth state
 #     v2: force_mono moved from one global flag to per-bank
+# The last version that changed how a BANK is stored. v4 only added the
+# optional "patterns" section, so a v3 bank carried over into a v4 preset is
+# not out of date and must not be reported as one.
+PRESET_BANK_FORMAT_VERSION = 3
+# Patterns live in their own folder in the preset, under the names the P-6
+# itself uses (P6_PTN1-01.PRM ...), so the folder can also be copied straight
+# into the device's RESTORE folder by hand.
+PRESET_PATTERN_DIR = "PATTERNS"
 
 
 def is_preset_folder(path):
@@ -3482,6 +3517,19 @@ def read_preset_manifest(preset_dir):
         return data
     except Exception:
         return None
+
+
+def preset_pattern_banks(manifest):
+    """The pattern banks (1-4) a preset manifest holds anything for."""
+    entry = (manifest or {}).get("patterns") or {}
+    if not isinstance(entry, dict):
+        return set()
+    out = set()
+    for label in entry.get("slots") or []:
+        slot = pattern_slot_from_label(label)
+        if slot:
+            out.add(slot[0])
+    return out
 
 
 def write_preset_manifest(preset_dir, data):
@@ -3601,6 +3649,28 @@ def verify_preset_folder(preset_dir):
                                     f"was built with {total}.")
                 if rate and rate != WT_SR:
                     problems.append(f"{where}: wavetable is {rate} Hz, expected {WT_SR}.")
+
+    pat_entry = manifest.get("patterns")
+    if pat_entry is not None:
+        if not isinstance(pat_entry, dict):
+            problems.append("patterns: malformed entry.")
+        else:
+            for label in pat_entry.get("slots") or []:
+                slot = pattern_slot_from_label(label)
+                if slot is None:
+                    problems.append(f"patterns: \"{label}\" is not a pattern slot.")
+                    continue
+                path = os.path.join(preset_dir, PRESET_PATTERN_DIR,
+                                    pattern_file_name(slot))
+                where = f"{PRESET_PATTERN_DIR}/{pattern_file_name(slot)}"
+                if not os.path.isfile(path):
+                    problems.append(f"Pattern {label}: {where} is missing.")
+                    continue
+                referenced.add(os.path.normcase(path))
+                try:
+                    P6Pattern.from_file(path)
+                except Exception as e:
+                    problems.append(f"Pattern {label}: {where} is unreadable ({e}).")
 
     strays = []
     for root, dirs, files in os.walk(preset_dir):
@@ -6731,8 +6801,8 @@ class PresetSaveDialog(FolderNavMixin, tk.Toplevel):
         super().__init__(parent)
         self.app = app
         self.title("Save Preset")
-        self.geometry(f"580x{600 + 32}")
-        self.minsize(580, 600 + 32)
+        self.geometry(f"580x{600 + 32 + 34}")
+        self.minsize(580, 600 + 32 + 34)
         style_toplevel(self)
         self.current_dir = initial_dir or os.path.expanduser("~")
         self.result_dir = None
@@ -6793,6 +6863,28 @@ class PresetSaveDialog(FolderNavMixin, tk.Toplevel):
             style_checkbutton(cb)
             cb.config(bg=BG_PANEL, activebackground=BG_PANEL)
             cb.pack(side="left", padx=6)
+        # One tickbox per pattern bank (16 patterns each), the same way as
+        # the sample banks. Only banks the app actually holds patterns for
+        # can be ticked - there is nothing to save for the others.
+        self.pattern_vars = {}
+        pattern_row = tk.Frame(banks_panel.body, bg=BG_PANEL)
+        pattern_row.pack(fill="x", pady=(2, 4))
+        pat_lbl = tk.Label(pattern_row, text="Patterns:")
+        style_label(pat_lbl, bg=BG_PANEL, fg=FG_MUTED, font=ui_font(9))
+        pat_lbl.pack(side="left", padx=(6, 2))
+        held = self.app.pattern_banks_loaded()
+        for pbank in range(1, PATTERN_BANKS + 1):
+            var = tk.BooleanVar(value=pbank in held)
+            self.pattern_vars[pbank] = var
+            cb = tk.Checkbutton(pattern_row, text=str(pbank), variable=var,
+                                state="normal" if pbank in held else "disabled")
+            style_checkbutton(cb)
+            cb.config(bg=BG_PANEL, activebackground=BG_PANEL)
+            cb.pack(side="left", padx=6)
+        if not held:
+            none_lbl = tk.Label(pattern_row, text="(no patterns loaded)")
+            style_label(none_lbl, bg=BG_PANEL, fg=FG_MUTED, font=ui_font(8))
+            none_lbl.pack(side="left", padx=6)
         select_row = tk.Frame(banks_panel.body, bg=BG_PANEL)
         select_row.pack(fill="x")
         all_btn = RoundedButton(select_row, text="All", command=lambda: self._set_all_banks(True),
@@ -6823,6 +6915,9 @@ class PresetSaveDialog(FolderNavMixin, tk.Toplevel):
     def _set_all_banks(self, value):
         for var in self.bank_vars.values():
             var.set(value)
+        held = self.app.pattern_banks_loaded()
+        for pbank, var in self.pattern_vars.items():
+            var.set(value and pbank in held)
 
     def _safe_grab(self, attempt=0):
         try:
@@ -6906,9 +7001,15 @@ class PresetSaveDialog(FolderNavMixin, tk.Toplevel):
                             parent=self)
             return
         banks_to_save = [b for b, var in self.bank_vars.items() if var.get()]
-        if not banks_to_save:
-            dark_showerror("No Banks Selected", "Check at least one bank to save.", parent=self)
+        patterns_to_save = [pb for pb, var in self.pattern_vars.items() if var.get()]
+        if not banks_to_save and not patterns_to_save:
+            dark_showerror("Nothing Selected",
+                           "Check at least one bank or pattern bank to save.", parent=self)
             return
+        what = ", ".join(banks_to_save)
+        if patterns_to_save:
+            what = ", ".join(x for x in (what, "patterns " + ", ".join(
+                str(pb) for pb in patterns_to_save)) if x)
 
         target = os.path.join(self.current_dir, name)
         if is_preset_folder(self.current_dir):
@@ -6926,7 +7027,7 @@ class PresetSaveDialog(FolderNavMixin, tk.Toplevel):
             proceed = dark_askyesno(
                 "Overwrite Preset?",
                 f"'{name}' already exists as a preset.\n\n"
-                f"The checked bank(s) ({', '.join(banks_to_save)}) will be overwritten. "
+                f"The checked bank(s) ({what}) will be overwritten. "
                 f"Other banks already saved in this preset are left as-is.\n\nContinue?",
                 parent=self
             )
@@ -6945,7 +7046,8 @@ class PresetSaveDialog(FolderNavMixin, tk.Toplevel):
                 return
 
         try:
-            self.result_dir = self.app.save_preset_to_folder(self.current_dir, name, banks_to_save)
+            self.result_dir = self.app.save_preset_to_folder(
+                self.current_dir, name, banks_to_save, pattern_banks=patterns_to_save)
         except Exception as e:
             dark_showerror("Save Error", str(e), parent=self)
             return
@@ -6965,12 +7067,13 @@ class PresetLoadDialog(FolderNavMixin, tk.Toplevel):
         super().__init__(parent)
         self.app = app
         self.title("Load Preset")
-        self.geometry(f"580x{600 + 32}")
-        self.minsize(580, 600 + 32)
+        self.geometry(f"580x{600 + 32 + 34}")
+        self.minsize(580, 600 + 32 + 34)
         style_toplevel(self)
         self.current_dir = initial_dir or os.path.expanduser("~")
         self.result_dir = None
         self.result_banks = []
+        self.result_pattern_banks = []
         self.result_target_override = None
         self.selected_preset_dir = None
         self._preselect_path = preselect_path
@@ -7019,6 +7122,21 @@ class PresetLoadDialog(FolderNavMixin, tk.Toplevel):
             cb.config(bg=BG_PANEL, activebackground=BG_PANEL)
             cb.pack(side="left", padx=6)
             self.bank_checkbuttons[bank] = cb
+        self.pattern_vars = {}
+        self.pattern_checkbuttons = {}
+        pattern_row = tk.Frame(self.banks_panel.body, bg=BG_PANEL)
+        pattern_row.pack(fill="x", pady=(2, 4))
+        pat_lbl = tk.Label(pattern_row, text="Patterns:")
+        style_label(pat_lbl, bg=BG_PANEL, fg=FG_MUTED, font=ui_font(9))
+        pat_lbl.pack(side="left", padx=(6, 2))
+        for pbank in range(1, PATTERN_BANKS + 1):
+            var = tk.BooleanVar(value=False)
+            self.pattern_vars[pbank] = var
+            cb = tk.Checkbutton(pattern_row, text=str(pbank), variable=var, state="disabled")
+            style_checkbutton(cb)
+            cb.config(bg=BG_PANEL, activebackground=BG_PANEL)
+            cb.pack(side="left", padx=6)
+            self.pattern_checkbuttons[pbank] = cb
         self.no_preset_label = tk.Label(self.banks_panel.body, text="No preset selected yet.", anchor="w")
         style_label(self.no_preset_label, bg=BG_PANEL, fg=FG_MUTED, font=ui_font(8))
         self.no_preset_label.pack(fill="x")
@@ -7138,6 +7256,11 @@ class PresetLoadDialog(FolderNavMixin, tk.Toplevel):
             else:
                 self.bank_vars[bank].set(False)
                 cb.config(state="disabled")
+        available_patterns = preset_pattern_banks(manifest) if manifest else set()
+        for pbank, cb in self.pattern_checkbuttons.items():
+            on = pbank in available_patterns
+            self.pattern_vars[pbank].set(on)
+            cb.config(state="normal" if on else "disabled")
 
         if manifest is None:
             self.no_preset_label.config(text="No preset selected yet.")
@@ -7152,8 +7275,10 @@ class PresetLoadDialog(FolderNavMixin, tk.Toplevel):
         if not self.selected_preset_dir:
             return
         banks_to_load = [b for b, var in self.bank_vars.items() if var.get()]
-        if not banks_to_load:
-            dark_showerror("No Banks Selected", "Check at least one bank to load.", parent=self)
+        patterns_to_load = [pb for pb, var in self.pattern_vars.items() if var.get()]
+        if not banks_to_load and not patterns_to_load:
+            dark_showerror("Nothing Selected",
+                           "Check at least one bank or pattern bank to load.", parent=self)
             return
 
         target_override = None
@@ -7162,10 +7287,12 @@ class PresetLoadDialog(FolderNavMixin, tk.Toplevel):
 
         target_banks = [target_override] if target_override else banks_to_load
         will_overwrite = [b for b in target_banks if self.app.bank_has_samples(b)]
+        held = self.app.pattern_banks_loaded()
+        will_overwrite += [f"patterns {pb}" for pb in patterns_to_load if pb in held]
         if will_overwrite:
             proceed = dark_askyesno(
                 "Overwrite Loaded Pads?",
-                f"Bank(s) {', '.join(will_overwrite)} currently have samples loaded. "
+                f"Bank(s) {', '.join(will_overwrite)} currently hold content. "
                 f"Loading this preset will replace them.\n\nContinue?",
                 parent=self
             )
@@ -7174,6 +7301,7 @@ class PresetLoadDialog(FolderNavMixin, tk.Toplevel):
 
         self.result_dir = self.selected_preset_dir
         self.result_banks = banks_to_load
+        self.result_pattern_banks = patterns_to_load
         self.result_target_override = target_override
         self.destroy()
 
@@ -27730,6 +27858,15 @@ def pattern_slot_label(slot):
     return f"{slot[0]}-{slot[1]:02d}"
 
 
+def pattern_slot_from_label(label):
+    """"1-05" -> (1, 5), or None for anything that is not a real slot."""
+    m = re.match(r"^\s*(\d+)-(\d+)\s*$", str(label))
+    if not m:
+        return None
+    slot = (int(m.group(1)), int(m.group(2)))
+    return slot if slot in PATTERN_SLOTS else None
+
+
 def part_for_pad(bank, pad):
     return PATTERN_PART_BASE + BANKS.index(bank) * len(PADS) + (pad - 1)
 
@@ -29115,9 +29252,10 @@ class P6ManagerApp:
             else os.path.expanduser("~"))
         dialog = PresetLoadDialog(self.root, self, initial_dir=initial_dir, preselect_path=preselect)
         self.root.wait_window(dialog)
-        if dialog.result_dir and dialog.result_banks:
+        if dialog.result_dir and (dialog.result_banks or dialog.result_pattern_banks):
             self.load_preset_from_folder(dialog.result_dir, dialog.result_banks,
-                                          target_bank_override=dialog.result_target_override)
+                                          target_bank_override=dialog.result_target_override,
+                                          pattern_banks=dialog.result_pattern_banks)
 
     def show_progress(self, message):
         """Live progress update during a longer operation (e.g. exporting
@@ -29725,7 +29863,7 @@ class P6ManagerApp:
             "someone else, so anything listed here would break it for them.")
         return False
 
-    def save_preset_to_folder(self, target_dir, name, banks_to_save):
+    def save_preset_to_folder(self, target_dir, name, banks_to_save, pattern_banks=()):
         """Saves the given banks into <target_dir>/<name>/, copying each
         pad's sample into BANK_X/PAD_Y/ alongside a preset.json manifest.
         If a preset of that name already exists, only the checked banks are
@@ -29863,9 +30001,13 @@ class P6ManagerApp:
             "format_version": PRESET_FORMAT_VERSION,
             "banks": banks_data,
         }
+        pattern_slots = self._save_preset_patterns(preset_dir, existing, pattern_banks,
+                                                   copy_failures)
+        if pattern_slots:
+            manifest["patterns"] = {"slots": pattern_slots}
         write_preset_manifest(preset_dir, manifest)
         add_recent_preset(preset_dir)
-        if carried and existing_version and existing_version < PRESET_FORMAT_VERSION:
+        if carried and existing_version and existing_version < PRESET_BANK_FORMAT_VERSION:
             dark_showwarning(
                 "Older Preset Updated",
                 f"This preset was written in format version {existing_version}. "
@@ -29884,7 +30026,84 @@ class P6ManagerApp:
         self._report_preset_check(preset_dir, "This preset was saved, but:")
         return preset_dir
 
-    def load_preset_from_folder(self, preset_dir, banks_to_load, target_bank_override=None):
+    def _save_preset_patterns(self, preset_dir, existing, pattern_banks, failures):
+        """Writes the checked pattern banks into <preset>/PATTERNS/ and
+        returns the slot labels the manifest should list.
+
+        Same partial-overwrite rule as the sample banks: a pattern bank that
+        was not checked keeps whatever an earlier save put there, and a
+        checked one is replaced completely - including slots that are empty
+        now, whose old files are removed."""
+        pat_dir = os.path.join(preset_dir, PRESET_PATTERN_DIR)
+        kept = []
+        for label in ((existing.get("patterns") or {}).get("slots") or []):
+            slot = pattern_slot_from_label(label)
+            if (slot and slot[0] not in pattern_banks
+                    and os.path.isfile(os.path.join(pat_dir, pattern_file_name(slot)))):
+                kept.append(slot)
+        written = []
+        if pattern_banks:
+            os.makedirs(pat_dir, exist_ok=True)
+            for slot in PATTERN_SLOTS:
+                if slot[0] not in pattern_banks:
+                    continue
+                path = os.path.join(pat_dir, pattern_file_name(slot))
+                pat = self.patterns.get(slot)
+                try:
+                    if pat is None:
+                        if os.path.isfile(path):
+                            os.remove(path)
+                        continue
+                    pat.write(path)
+                    written.append(slot)
+                except OSError as e:
+                    failures.append(f"Pattern {pattern_slot_label(slot)} - {e}")
+        slots = sorted(set(kept) | set(written))
+        if not slots and os.path.isdir(pat_dir):
+            try:
+                os.rmdir(pat_dir)       # only if empty; never a tree delete
+            except OSError:
+                pass
+        return [pattern_slot_label(s) for s in slots]
+
+    def pattern_banks_loaded(self):
+        """Pattern banks (1-4) the app currently holds at least one pattern for."""
+        return {slot[0] for slot, pat in self.patterns.items() if pat is not None}
+
+    def _load_preset_patterns(self, preset_dir, manifest, pattern_banks):
+        """Replaces the checked pattern banks with the preset's. Returns a
+        list of problems (unreadable files). Called after _push_undo(), so
+        the load is one undo step with the banks."""
+        labels = (manifest.get("patterns") or {}).get("slots") or []
+        slots = {pattern_slot_from_label(l) for l in labels} - {None}
+        pat_dir = os.path.join(preset_dir, PRESET_PATTERN_DIR)
+        problems = []
+        loaded = 0
+        for slot in PATTERN_SLOTS:
+            if slot[0] not in pattern_banks:
+                continue
+            self.patterns.pop(slot, None)
+            if slot not in slots:
+                continue
+            path = os.path.join(pat_dir, pattern_file_name(slot))
+            try:
+                self.patterns[slot] = P6Pattern.from_file(path)
+                loaded += 1
+            except Exception as e:
+                problems.append(f"Pattern {pattern_slot_label(slot)}: {e}")
+        if self.pattern_source_dir is None:
+            # Something to show in the header, and the folder that Save
+            # refuses to write back into.
+            self.pattern_source_dir = pat_dir
+        if self.selected_pattern and self.selected_pattern not in self.patterns:
+            self.selected_pattern = None
+        # Not what is on the device any more, whatever it was before.
+        self._patterns_dirty = True
+        self._refresh_pattern_links()
+        return loaded, problems
+
+    def load_preset_from_folder(self, preset_dir, banks_to_load, target_bank_override=None,
+                                pattern_banks=()):
         """Loads the checked banks from a preset folder. Banks not present
         in the manifest, or not checked, are left untouched. If
         target_bank_override is set (only meaningful with a single bank in
@@ -29957,9 +30176,20 @@ class P6ManagerApp:
             if target_bank in self.force_mono_vars:
                 self.force_mono_vars[target_bank].set(bool(bank_entry.get("force_mono", False)))
 
+        pattern_problems = []
+        if pattern_banks:
+            loaded, pattern_problems = self._load_preset_patterns(
+                preset_dir, manifest, set(pattern_banks))
+            if loaded and self._view_mode != "patterns":
+                self.show_status(f"Loaded {loaded} patterns - see All banks + patterns.",
+                                 kind="info")
+
         self.build_pad_slots(self.current_bank.get())
         self.on_force_mono_changed()  # refreshes pad locks/waveforms/storage for the new state
         add_recent_preset(preset_dir)
+        if pattern_problems:
+            dark_showwarning("Some Patterns Could Not Be Read",
+                             "\n".join(pattern_problems[:12]))
 
         if missing_samples:
             dark_showwarning(
@@ -30864,8 +31094,9 @@ class P6ManagerApp:
                                  width=64, height=24, radius=7, font=ui_font(8, "bold"))
         load_btn.pack(side="left", padx=(10, 0))
         add_tooltip(load_btn,
-                    "Load the P-6's patterns (P6_PTN1-01.PRM \u2026 P6_PTN4-16.PRM) from a "
-                    "backup folder. The files themselves are never changed.")
+                    "Load the P-6's patterns (P6_PTN1-01.PRM \u2026 P6_PTN4-16.PRM): "
+                    "straight from the P-6's BACKUP folder when it is mounted, or "
+                    "from any folder on this computer. The files are never changed.")
         self.pattern_save_btn = RoundedButton(
             head, text="Save\u2026", command=self.save_patterns_dialog,
             bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=64, height=24, radius=7,
@@ -30873,7 +31104,8 @@ class P6ManagerApp:
         self.pattern_save_btn.pack(side="left", padx=(4, 0))
         add_tooltip(self.pattern_save_btn,
                     "Write the patterns, in their new order and with their new pad "
-                    "numbers, to another folder - for example the P-6's RESTORE folder.")
+                    "numbers, into the P-6's RESTORE folder when it is mounted (then "
+                    "eject and press [KYBD]), or into a folder on this computer.")
 
         sync_cb = tk.Checkbutton(head, text="Sync patterns with pad moves",
                                  variable=self.pattern_sync_var,
@@ -31032,16 +31264,64 @@ class P6ManagerApp:
         self.show_status("Pad moves now update the patterns." if on else
                          "Pad moves no longer touch the patterns.", kind="info")
 
+    def _find_p6_pattern_dir_async(self, kind, on_done):
+        """guess_p6_pattern_dir() off the main thread - it globs the same
+        mount points as the IMPORT detection, and a stale automount there can
+        block for seconds. Same queue-and-poll hand-back as
+        _resolve_import_root_async, never Tk from the worker."""
+        result_queue = queue.Queue()
+        threading.Thread(target=lambda: result_queue.put(guess_p6_pattern_dir(kind)),
+                         daemon=True).start()
+        self.show_progress("Looking for the P-6 \u2026")
+
+        def poll():
+            try:
+                found = result_queue.get_nowait()
+            except queue.Empty:
+                self.root.after(50, poll)
+                return
+            self.show_status("")
+            on_done(found)
+
+        self.root.after(50, poll)
+
+    def _ask_device_or_folder(self, title, prompt, device_label):
+        """"device" or "folder" or None, for a found P-6 folder."""
+        options = [device_label, "A folder on this computer\u2026"]
+        choice = dark_ask_choice(self.root, title, prompt, options, initial=options[0])
+        if choice is None:
+            return None
+        return "device" if choice == options[0] else "folder"
+
     def load_patterns_dialog(self):
+        self._find_p6_pattern_dir_async("BACKUP", self._load_patterns_with_backup)
+
+    def _load_patterns_with_backup(self, backup_dir):
+        if backup_dir:
+            how = self._ask_device_or_folder(
+                "Load Patterns",
+                "Where should the patterns come from?",
+                f"The P-6 (BACKUP folder: {backup_dir})")
+            if how is None:
+                return
+            if how == "device":
+                self.load_patterns_from_folder(backup_dir)
+                return
         cfg = load_config()
         initial = cfg.get("last_pattern_dir")
         if not (initial and os.path.isdir(initial)):
-            initial = os.path.dirname(self.import_root) if self.import_root else None
+            initial = os.path.expanduser("~")
         picker = FolderPickerDialog(self.root, initial_dir=initial,
-                                    title="Select the P-6 BACKUP Folder (patterns)")
+                                    title="Select a Folder of P-6 Patterns")
         self.root.wait_window(picker)
         if picker.selected_dir:
+            save_config_value("last_pattern_dir", picker.selected_dir)
             self.load_patterns_from_folder(picker.selected_dir)
+        elif not backup_dir:
+            self.show_status("No P-6 BACKUP folder found. To read patterns off the "
+                             "device, start it in backup mode (Owner's Manual: "
+                             "\u201cBacking up the patterns\u201d).", kind="info",
+                             duration_ms=9000)
 
     def load_patterns_from_folder(self, folder):
         if self._patterns_dirty and self.patterns and not dark_askyesno(
@@ -31068,7 +31348,6 @@ class P6ManagerApp:
         self.selected_pattern = None
         self._pattern_focus = "pattern"
         self._patterns_dirty = False
-        save_config_value("last_pattern_dir", folder)
         self._refresh_pattern_links()
         missing = len(PATTERN_SLOTS) - len(loaded)
         note = f" {missing} slot{'s' if missing != 1 else ''} had no file." if missing else ""
@@ -31080,12 +31359,25 @@ class P6ManagerApp:
     def save_patterns_dialog(self):
         if not self.patterns:
             return
+        self._find_p6_pattern_dir_async("RESTORE", self._save_patterns_with_restore)
+
+    def _save_patterns_with_restore(self, restore_dir):
+        if restore_dir:
+            how = self._ask_device_or_folder(
+                "Save Patterns",
+                "Where should the patterns go?",
+                f"The P-6 (RESTORE folder: {restore_dir})")
+            if how is None:
+                return
+            if how == "device":
+                self.save_patterns_to_folder(restore_dir, to_device=True)
+                return
         cfg = load_config()
         initial = cfg.get("last_pattern_save_dir")
         if not (initial and os.path.isdir(initial)):
-            initial = os.path.dirname(self.pattern_source_dir or "") or None
+            initial = os.path.expanduser("~")
         picker = FolderPickerDialog(self.root, initial_dir=initial,
-                                    title="Save Patterns To (e.g. the P-6 RESTORE folder)")
+                                    title="Save Patterns To Folder")
         self.root.wait_window(picker)
         target = picker.selected_dir
         if not target:
@@ -31094,14 +31386,13 @@ class P6ManagerApp:
                 os.path.normcase(os.path.abspath(self.pattern_source_dir)):
             dark_showwarning("Pick Another Folder",
                              "That is the folder the patterns were loaded from. Save "
-                             "them somewhere else - the P-6's RESTORE folder, or a new "
-                             "folder - so the original backup stays as it was.",
+                             "them somewhere else, so the original stays as it was.",
                              parent=self.root)
             return
         save_config_value("last_pattern_save_dir", target)
         self.save_patterns_to_folder(target)
 
-    def save_patterns_to_folder(self, target):
+    def save_patterns_to_folder(self, target, to_device=False):
         """Writes every slot as P6_PTN<b>-<nn>.PRM into `target`.
 
         A pattern file already in the folder for a slot that is now empty
@@ -31125,6 +31416,8 @@ class P6ManagerApp:
         empty_slots = len(PATTERN_SLOTS) - len(to_write)
 
         lines = [f"Write {len(to_write)} pattern files to\n{target}"]
+        if to_device:
+            lines[0] = f"Write {len(to_write)} pattern files to the P-6's RESTORE folder\n{target}"
         if overwrite:
             lines.append(f"{overwrite} existing pattern file(s) there will be replaced.")
         if stale:
@@ -31146,7 +31439,9 @@ class P6ManagerApp:
                           and not PATTERN_FILE_RE.match(n)]
             except OSError:
                 others = []
-        copy_others = bool(others) and dark_askyesno(
+        # Never into the device's RESTORE folder: it takes pattern files, and
+        # the rest of a backup folder has no business there.
+        copy_others = bool(others) and not to_device and dark_askyesno(
             "Copy the Rest of the Backup?",
             f"The folder the patterns came from also holds {len(others)} other "
             f"file(s). Copy them too, so the new folder is a complete backup?",
@@ -31179,6 +31474,13 @@ class P6ManagerApp:
                            parent=self.root)
             return
         self._set_patterns_dirty(False)
+        if to_device:
+            dark_showinfo("Patterns Copied to the P-6",
+                          f"{len(to_write)} pattern files are in the RESTORE folder.\n\n"
+                          "Eject the P-6 drive from this computer, then press [KYBD] on "
+                          "the P-6 to restore the patterns.", parent=self.root)
+            self.show_status(f"Saved {len(to_write)} patterns to the P-6 RESTORE folder.")
+            return
         self.show_status(f"Saved {len(to_write)} patterns to {os.path.basename(target)}.")
 
     def switch_bank(self, bank):
