@@ -453,6 +453,38 @@ area below and switches the app to that bank.
 their buttons off so nothing fires by accident, then lets you drag pads onto
 pads, or bank letters onto rows. Everything swaps; nothing is overwritten.
 
+#### All banks + patterns
+
+The third entry in the view dropdown keeps the same 8x6 grid, slimmed down
+to each pad's waveform and its Play button, and adds the P-6's 64 patterns
+(4 banks of 16) in a strip underneath.
+
+- **Load...** reads the pattern files (`P6_PTN1-01.PRM` ... `P6_PTN4-16.PRM`)
+  from a backup folder. Picking the folder above it works too; `BACKUP` is
+  looked for one level down. The files you load from are never changed.
+- **Click a pattern** to select it. Its tempo, length, shuffle, level,
+  transpose and scale, its steps and the samples it plays (with how many
+  notes each) show in the card on the right, and the pads it plays are
+  marked green in the grid. A sample chip in red is a pad that is empty in
+  the app; `M` marks a part the pattern mutes.
+- **Click a pad's waveform** (or play it) to go the other way: every pattern
+  that plays that pad is marked green. Double-click the waveform to open the
+  editor.
+- **Drag a pattern** onto another slot to swap the two; dropping on an empty
+  slot moves it. No Drag mode is needed for patterns.
+- **Sync patterns with pad moves** - when ticked, swapping two pads (in any
+  view), swapping two banks, or moving a bank rewrites every loaded pattern
+  so it keeps playing the same samples at their new addresses: the notes,
+  the granular source, the motion targets and the per-part mute/quantize
+  settings all follow the pad. One Ctrl+Z undoes the pad move and the
+  pattern changes together.
+- **Save...** writes all 64 slots to another folder (for example the P-6's
+  RESTORE folder), named for their new slots. It can also copy the rest of
+  the backup folder alongside them.
+
+Pattern files number the sample pads 0-47: A1 is 0, A6 is 5, B1 is 6 ... H6
+is 47. Part 48 is the granular part.
+
 ### 5.7 Playback and removal
 
 "▶" plays the pad's sample exactly as it will sound after export (rate,

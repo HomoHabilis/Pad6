@@ -26989,6 +26989,10 @@ class CompactSlot:
         self._dragging = False
         self._filled = False
         self._drop_highlight = None
+        # Slim: the all-banks + patterns view. Only Play survives, beside the
+        # waveform instead of under it, so the eight rows give up enough
+        # height for the pattern strip and everything still fits on screen.
+        self._slim = False
 
         # highlightthickness stays at 2 in every state and only the colour
         # changes: switching thickness for a drop highlight would move the
@@ -27006,11 +27010,14 @@ class CompactSlot:
         self.body = body
         body.pack(side="left", fill="both", expand=True, padx=(2, 4), pady=3)
 
-        self.wave_canvas = tk.Canvas(body, bg=WAVE_BG, height=sc(self.WAVE_H),
+        self.wave_row = tk.Frame(body, bg=BG_PANEL)
+        self.wave_row.pack(fill="x")
+        self.wave_canvas = tk.Canvas(self.wave_row, bg=WAVE_BG, height=sc(self.WAVE_H),
                                       width=sc(60), highlightthickness=0, cursor="hand2")
-        self.wave_canvas.pack(fill="x")
+        self.wave_canvas.pack(side="left", fill="x", expand=True)
         self.wave_canvas.bind("<Configure>", self._redraw_wave)
         self.wave_canvas.bind("<Button-1>", self._on_wave_click)
+        self.wave_canvas.bind("<Double-Button-1>", self._on_wave_double_click)
         # Not "Bank G, PAD_3. Click to open the waveform editor for this pad -
         # it switches to this bank first." The cell is labelled G3 and the
         # pointer is on it, so naming it back is noise; and switching bank is
@@ -27057,12 +27064,21 @@ class CompactSlot:
         self.synth_btn = make("S", BTN_BLUE, "open_synth",
                               "Synth: build a wavetable oscillator.")
 
+        # The slim layout's only button. Its own widget rather than play_btn
+        # re-packed: the two rows are packed and unpacked independently.
+        self.slim_play_btn = RoundedButton(self.wave_row, text="\u25b6",
+                                            command=lambda: self._act("toggle_play_pad"),
+                                            bg=BTN_GREEN, fg="#FFFFFF", parent_bg=BG_PANEL,
+                                            width=self.BTN_W, height=self.WAVE_H, radius=5,
+                                            font=ui_font(8, "bold"))
+        add_tooltip(self.slim_play_btn, "Play, as it will sound on the P-6.")
+
         # Bound on every surface of the cell, including the buttons: in drag
         # mode the button row is not on screen, but the waveform, the label
         # and the frames themselves all have to answer to the gesture, or
         # the pad has dead spots you cannot pick it up by.
         for surface in (self.outer, self.body, self.wave_canvas, self.drag_row,
-                        self.drag_label, self.stripe_holder, self.stripe):
+                        self.drag_label, self.stripe_holder, self.stripe, self.wave_row):
             surface.bind("<ButtonPress-1>", self._drag_start, add="+")
             surface.bind("<B1-Motion>", self._drag_motion, add="+")
             surface.bind("<ButtonRelease-1>", self._drag_end, add="+")
@@ -27075,7 +27091,41 @@ class CompactSlot:
         # the start of a drag, not a request to open the editor.
         if self._drag_mode:
             return
+        if self._slim:
+            # Slim cells are what the pattern strip is matched against, so a
+            # click selects - shows the pad below and lights the patterns
+            # that play it. The editor moves to a double-click.
+            self._show_if_loaded()
+            return
         self._act("open_waveform_view")
+
+    def _on_wave_double_click(self, _event=None):
+        if self._slim and not self._drag_mode:
+            self._act("open_waveform_view")
+
+    def set_slim(self, on):
+        if on == self._slim:
+            return
+        self._slim = on
+        self._layout_rows()
+        add_tooltip(self.wave_canvas,
+                    "Click to select (and light the patterns that play it). "
+                    "Double-click to open the waveform editor." if on
+                    else "Click to open the waveform editor.")
+
+    def _layout_rows(self):
+        """Which row sits under the waveform: the buttons, the grey drag
+        surface, or - slim - nothing, with Play beside the waveform."""
+        self.btn_row.pack_forget()
+        self.drag_row.pack_forget()
+        self.slim_play_btn.pack_forget()
+        if self._slim:
+            if not self._drag_mode:
+                self.slim_play_btn.pack(side="left", padx=(0, 3), before=self.wave_canvas)
+        elif self._drag_mode:
+            self.drag_row.pack(fill="x", pady=(4, 0))
+        else:
+            self.btn_row.pack(fill="x", pady=(4, 0))
 
     def _act(self, action):
         self.app.act_on_overview_pad(self.bank, self.pad, action)
@@ -27109,6 +27159,7 @@ class CompactSlot:
             btn.config_state("disabled" if filled else "normal")
         self.synth_btn.config_state("normal" if (not filled) or is_wt else "disabled")
         self.play_btn.config_state("normal" if filled else "disabled")
+        self.slim_play_btn.config_state("normal" if filled else "disabled")
         self.remove_btn.config_state("normal" if (filled or missing) else "disabled")
 
         if missing:
@@ -27160,9 +27211,10 @@ class CompactSlot:
         if is_playing == self._is_playing:
             return
         self._is_playing = is_playing
-        self.play_btn.bg_color = BG_INPUT if is_playing else BTN_GREEN
-        self.play_btn.text = "\u25a0" if is_playing else "\u25b6"
-        self.play_btn._draw()
+        for btn in (self.play_btn, self.slim_play_btn):
+            btn.bg_color = BG_INPUT if is_playing else BTN_GREEN
+            btn.text = "\u25a0" if is_playing else "\u25b6"
+            btn._draw()
 
     # ------------------------------------------------------------------
     # Drag mode
@@ -27182,14 +27234,10 @@ class CompactSlot:
         if on == self._drag_mode:
             return
         self._drag_mode = on
-        if on:
-            self.btn_row.pack_forget()
-            self.drag_row.pack(fill="x", pady=(4, 0))
-        else:
-            self.drag_row.pack_forget()
-            self.btn_row.pack(fill="x", pady=(4, 0))
+        self._layout_rows()
         self.outer.config(bg=BG_INPUT if on else BG_PANEL)
-        for widget in (self.stripe_holder, self.body, self.drag_row, self.drag_label):
+        for widget in (self.stripe_holder, self.body, self.drag_row, self.drag_label,
+                       self.wave_row):
             widget.config(bg=BG_INPUT if on else BG_PANEL)
         self.wave_canvas.config(cursor="fleur" if on else "hand2")
         # Re-reads the pad so the mono stripe keeps its colour against the
@@ -27276,15 +27324,25 @@ class CompactSlot:
         thickness is fixed for every cell in the grid, since changing it
         would shift a cell's contents and reflow all 48 of them.
         """
+        linked = self.app.is_pattern_linked_pad(self.bank, self.pad)
         if self._drop_highlight:
             color = self._drop_highlight
         elif self.app.is_active_overview_pad(self.bank, self.pad):
             color = ACCENT_BLUE
+        elif linked:
+            color = ACCENT_GREEN
         elif self._filled:
             color = BORDER_LIGHT
         else:
             color = BORDER_COLOR
         self.outer.config(highlightbackground=color, highlightcolor=color)
+        # Played by the selected pattern: the ring inside the border is
+        # tinted as well, since a 2 px green line alone is easy to miss
+        # across 48 cells. Only the frame's own background - the padding
+        # around the body - so nothing inside the cell moves.
+        base = BG_INPUT if self._drag_mode else BG_PANEL
+        self.outer.config(bg=SELECT_GREEN if linked else base)
+        self.stripe_holder.config(bg=SELECT_GREEN if linked else base)
 
 
 def _wrap_two_lines(font, text, avail):
@@ -27625,6 +27683,609 @@ def draw_wavetable_zones(c_widget, zones, width_px, height_px,
                         tags="waveform")
     zone_tip.set_regions(zone_regions)
 
+# ---------------------------------------------------------------------------
+# Patterns (P6_PTNx-yy.PRM)
+# ---------------------------------------------------------------------------
+# The P-6 backs its patterns up as one plain-text file per slot, named
+# P6_PTN<bank>-<nn>.PRM: 4 pattern banks of 16. Same "KEY\t= value" layout
+# as the sample .PRM sidecars, plus per-step lines:
+#
+#   STEP_NOTE_SMPL <step>  = PART1=17 NOTE1=60 VELO1=100 ... PART8=-1 ...
+#   STEP_NOTE_GRNL <step>  = NOTE1=-1 VELO1=0 ...          (granular part)
+#   PART_MUTE              = 0=0 1=0 ... 47=0 48=1         (one per part)
+#
+# A PART number is a sample pad. The mapping is ONE assumption, kept in
+# PATTERN_PART_BASE: part = base + bank_index * 6 + (pad - 1), so with the
+# base at 0, A1 is 0, B1 is 6 and H6 is 47. Part 48 is the granular part,
+# which plays the sample named by GRANU_PHRASE (same numbering).
+#
+# The text is kept verbatim and only the numbers that name a pad are ever
+# rewritten, so every value this app does not understand goes back to the
+# device exactly as it came off it.
+
+PATTERN_BANKS = 4
+PATTERNS_PER_BANK = 16
+PATTERN_SLOTS = [(b, n) for b in range(1, PATTERN_BANKS + 1)
+                 for n in range(1, PATTERNS_PER_BANK + 1)]
+PATTERN_FILE_RE = re.compile(r"^P6_PTN(\d+)-(\d+)\.PRM$", re.IGNORECASE)
+PATTERN_PART_BASE = 0
+PATTERN_MAX_STEPS = 64
+PATTERN_SAMPLE_PARTS = len(BANKS) * len(PADS)      # 48 sample parts
+GRANULAR_PART = PATTERN_PART_BASE + PATTERN_SAMPLE_PARTS
+
+# Per-part lists ("0=0 1=0 ... 48=0"): an entry belongs to a pad, so it has
+# to travel with the pad when the pad moves.
+_PATTERN_PART_LISTS = ("PART_MUTE", "PART_QUANTIZE", "RESERVED_PTN1")
+_PATTERN_LINE_RE = re.compile(r"^([^\t=]+?)(\s*=\s?)(.*)$")
+_PATTERN_PART_RE = re.compile(r"(\bPART\d+=)(-?\d+)")
+_PATTERN_NOTE_RE = re.compile(r"\bNOTE(\d+)=(-?\d+)")
+_PATTERN_LIST_RE = re.compile(r"(\d+)=(-?\d+)")
+
+
+def pattern_file_name(slot):
+    return f"P6_PTN{slot[0]}-{slot[1]:02d}.PRM"
+
+
+def pattern_slot_label(slot):
+    return f"{slot[0]}-{slot[1]:02d}"
+
+
+def part_for_pad(bank, pad):
+    return PATTERN_PART_BASE + BANKS.index(bank) * len(PADS) + (pad - 1)
+
+
+def pad_for_part(part):
+    """(bank, pad) for a sample PART number, or None for the granular part,
+    an empty note (-1) or anything out of range."""
+    i = part - PATTERN_PART_BASE
+    if 0 <= i < PATTERN_SAMPLE_PARTS:
+        return BANKS[i // len(PADS)], PADS[i % len(PADS)]
+    return None
+
+
+def pad_name_for_part(part):
+    where = pad_for_part(part)
+    return f"{where[0]}{where[1]}" if where else "?"
+
+
+class P6Pattern:
+    """One pattern file, immutable.
+
+    Immutable so an undo snapshot is a shallow copy of the slot dict: 64
+    patterns of ~90 KB each would otherwise be copied on every pad change.
+    remap_parts() returns a new object instead of editing this one.
+    """
+
+    def __init__(self, text, source_path=None):
+        self.text = text
+        self.source_path = source_path
+        self._parse()
+
+    @classmethod
+    def from_file(cls, path):
+        # newline="" keeps \r\n intact if the device ever writes it, so a
+        # pattern that is only moved is written back byte for byte.
+        with open(path, "r", encoding="ascii", errors="surrogateescape",
+                  newline="") as f:
+            return cls(f.read(), source_path=path)
+
+    def write(self, path):
+        with open(path, "w", encoding="ascii", errors="surrogateescape",
+                  newline="") as f:
+            f.write(self.text)
+
+    def _parse(self):
+        values = {}
+        smpl_steps = {}
+        grnl_steps = {}
+        for line in self.text.splitlines():
+            m = _PATTERN_LINE_RE.match(line)
+            if not m:
+                continue
+            key, value = m.group(1).strip(), m.group(3)
+            if key.startswith("STEP_NOTE_SMPL "):
+                parts = [int(v) for _k, v in _PATTERN_PART_RE.findall(value)]
+                smpl_steps[_int_or(key.split()[-1], 0)] = [p for p in parts if p >= 0]
+            elif key.startswith("STEP_NOTE_GRNL "):
+                notes = [int(v) for _k, v in _PATTERN_NOTE_RE.findall(value)]
+                grnl_steps[_int_or(key.split()[-1], 0)] = sum(1 for n in notes if n >= 0)
+            elif not key.startswith("STEP_"):
+                values[key] = value.strip()
+        self.values = values
+        self.length = _int_or(values.get("LENG"), 16)
+        self.tempo = _int_or(values.get("TEMPO"), 0) / 100.0
+        self.granular_source = _int_or(values.get("GRANU_PHRASE"), -1)
+        mutes = dict(_PATTERN_LIST_RE.findall(values.get("PART_MUTE", "")))
+        self.muted_parts = {int(k) for k, v in mutes.items() if v not in ("0", "")}
+
+        max_step = max([PATTERN_MAX_STEPS] + list(smpl_steps) + list(grnl_steps))
+        self.step_parts = [smpl_steps.get(i, []) for i in range(1, max_step + 1)]
+        self.step_granular = [grnl_steps.get(i, 0) for i in range(1, max_step + 1)]
+        self.note_count = sum(len(p) for p in self.step_parts)
+        self.granular_count = sum(self.step_granular)
+        counts = {}
+        for parts in self.step_parts:
+            for p in parts:
+                counts[p] = counts.get(p, 0) + 1
+        self.part_counts = counts
+
+    def value(self, key, default=None):
+        return self.values.get(key, default)
+
+    @property
+    def is_empty(self):
+        return self.note_count == 0 and self.granular_count == 0
+
+    def used_pads(self):
+        """Every (bank, pad) this pattern plays. The granular part's source
+        counts only when the pattern has granular notes: every file names a
+        GRANU_PHRASE, used or not, and counting it always would link one pad
+        to all 64 patterns."""
+        pads = {pad_for_part(p) for p in self.part_counts}
+        if self.granular_count and pad_for_part(self.granular_source):
+            pads.add(pad_for_part(self.granular_source))
+        pads.discard(None)
+        return pads
+
+    def remap_parts(self, mapping):
+        """A copy with every pad reference moved through `mapping`
+        ({old_part: new_part}, applied all at once so a swap is two entries).
+
+        Covers the notes, the granular source, the motion targets and the
+        per-part lists (mute, quantize). Parts not in the mapping, the
+        granular part itself and empty notes (-1) are left alone.
+        """
+        mapping = {int(k): int(v) for k, v in mapping.items() if k != v}
+        if not mapping:
+            return self
+
+        def move(num):
+            return mapping.get(num, num)
+
+        out = []
+        changed = False
+        for line in self.text.splitlines(keepends=True):
+            body = line.rstrip("\r\n")
+            ending = line[len(body):]
+            m = _PATTERN_LINE_RE.match(body)
+            if m:
+                key, sep, value = m.group(1), m.group(2), m.group(3)
+                k = key.strip()
+                new_value = value
+                if k.startswith("STEP_NOTE_SMPL "):
+                    new_value = _PATTERN_PART_RE.sub(
+                        lambda mm: f"{mm.group(1)}{move(int(mm.group(2)))}", value)
+                elif k == "GRANU_PHRASE" or (k.startswith("MOTION_PRM")
+                                             and k.endswith("_PART")):
+                    num = _int_or(value.strip(), None)
+                    if num is not None and num in mapping:
+                        new_value = value.replace(str(num), str(mapping[num]), 1)
+                elif k in _PATTERN_PART_LISTS:
+                    entries = _PATTERN_LIST_RE.findall(value)
+                    old = {int(i): v for i, v in entries}
+                    new = dict(old)
+                    for src, dst in mapping.items():
+                        if src in old and dst in old:
+                            new[dst] = old[src]
+                    if new != old:
+                        # Rebuilt in the original order with the original
+                        # trailing space, so an untouched list is unchanged.
+                        rebuilt = " ".join(f"{i}={new[int(i)]}" for i, _v in entries)
+                        trail = value[len(value.rstrip()):]
+                        new_value = rebuilt + trail
+                if new_value != value:
+                    changed = True
+                    line = f"{key}{sep}{new_value}{ending}"
+            out.append(line)
+        if not changed:
+            return self
+        return P6Pattern("".join(out), source_path=self.source_path)
+
+
+def _int_or(text, default):
+    try:
+        return int(str(text).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def find_pattern_files(folder):
+    """{slot: path} for every P6_PTNx-yy.PRM directly in `folder`, then,
+    if there are none, one level down (someone picking the P-6 drive or the
+    folder above BACKUP rather than BACKUP itself)."""
+    def scan(d):
+        found = {}
+        try:
+            names = sorted(os.listdir(d))
+        except OSError:
+            return found
+        for name in names:
+            m = PATTERN_FILE_RE.match(name)
+            if not m:
+                continue
+            slot = (int(m.group(1)), int(m.group(2)))
+            if slot in PATTERN_SLOTS and os.path.isfile(os.path.join(d, name)):
+                found[slot] = os.path.join(d, name)
+        return found
+
+    found = scan(folder)
+    if found:
+        return folder, found
+    try:
+        subdirs = sorted(e for e in os.listdir(folder)
+                         if os.path.isdir(os.path.join(folder, e)))
+    except OSError:
+        subdirs = []
+    # BACKUP first: it is where the P-6 writes them.
+    subdirs.sort(key=lambda e: e.upper() != "BACKUP")
+    for entry in subdirs:
+        sub = os.path.join(folder, entry)
+        found = scan(sub)
+        if found:
+            return sub, found
+    return folder, {}
+
+
+def remap_patterns(patterns, mapping):
+    """Applies a pad mapping to every pattern in a {slot: P6Pattern} dict.
+    Returns (new_dict, number_of_patterns_changed)."""
+    out = {}
+    changed = 0
+    for slot, pat in patterns.items():
+        new = pat.remap_parts(mapping) if pat is not None else None
+        if new is not pat:
+            changed += 1
+        out[slot] = new
+    return out, changed
+
+
+class _PatternHoverTooltip(_ZoneHoverTooltip):
+    """_ZoneHoverTooltip for a 2-D grid: regions are rectangles and carry
+    their finished text."""
+
+    def _region_at_xy(self, x, y):
+        for r in self.regions:
+            if r[0] <= x < r[2] and r[1] <= y < r[3]:
+                return r
+        return None
+
+    def _on_motion(self, event):
+        region = self._region_at_xy(event.x, event.y)
+        if region is self._current:
+            return
+        self._current = region
+        self._tip.set_text(region[4] if region else "")
+        if region:
+            self._tip._on_enter()
+
+
+class PatternStrip:
+    """The 4 x 16 pattern slots under the all-banks grid.
+
+    One canvas, not 64 widgets: the tiles are tiny, and a single canvas
+    redraws all of them in one go whenever a selection, a highlight or the
+    patterns themselves change - which happens on every pad click.
+
+    Click selects a pattern. Dragging one onto another slot swaps the two
+    (an empty slot included), the same gesture the pads use, but with no
+    Drag mode to arm first: a tile has no buttons on it, so a press can only
+    mean select-or-drag and the 6 px threshold tells the two apart.
+    """
+
+    ROW_H = 21
+    HEAD_W = 22
+    GAP = 2
+
+    def __init__(self, parent, app):
+        self.app = app
+        self.canvas = tk.Canvas(parent, bg=BG_DARK, highlightthickness=0,
+                                height=sc(self.ROW_H) * PATTERN_BANKS
+                                + sc(self.GAP) * (PATTERN_BANKS - 1) + sc(14))
+        self.canvas.bind("<Configure>", lambda _e: self.redraw())
+        self.canvas.bind("<ButtonPress-1>", self._press)
+        self.canvas.bind("<B1-Motion>", self._motion)
+        self.canvas.bind("<ButtonRelease-1>", self._release)
+        self._tip = _PatternHoverTooltip(self.canvas)
+        self._rects = {}
+        self._press_at = None
+        self._drag_slot = None
+        self._dragging = False
+        self._drop_slot = None
+
+    def pack(self, **kw):
+        self.canvas.pack(**kw)
+
+    def slot_at(self, x, y):
+        for slot, (x0, y0, x1, y1) in self._rects.items():
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return slot
+        return None
+
+    def redraw(self):
+        c = self.canvas
+        c.delete("all")
+        width = max(c.winfo_width(), 1)
+        head_w = sc(self.HEAD_W)
+        top = sc(14)
+        gap = sc(self.GAP)
+        row_h = sc(self.ROW_H)
+        tile_w = (width - head_w - gap * (PATTERNS_PER_BANK - 1)) / PATTERNS_PER_BANK
+        if tile_w < 8:
+            return
+        app = self.app
+        selected = app.selected_pattern
+        linked = app.patterns_linked_to_focus()
+        self._rects = {}
+        regions = []
+        for n in range(1, PATTERNS_PER_BANK + 1):
+            x = head_w + (n - 1) * (tile_w + gap)
+            c.create_text(x + tile_w / 2, top / 2, text=f"{n:02d}", fill=FG_MUTED,
+                          font=ui_font(7))
+        for b in range(1, PATTERN_BANKS + 1):
+            y0 = top + (b - 1) * (row_h + gap)
+            c.create_text(head_w / 2, y0 + row_h / 2, text=str(b), fill=FG_MUTED,
+                          font=ui_font(9, "bold"))
+            for n in range(1, PATTERNS_PER_BANK + 1):
+                slot = (b, n)
+                x0 = head_w + (n - 1) * (tile_w + gap)
+                x1, y1 = x0 + tile_w, y0 + row_h
+                self._rects[slot] = (x0, y0, x1, y1)
+                pat = app.patterns.get(slot)
+                self._draw_tile(c, slot, pat, x0, y0, x1, y1,
+                                selected=(slot == selected),
+                                linked=(slot in linked),
+                                drop=(slot == self._drop_slot),
+                                lifted=(self._dragging and slot == self._drag_slot))
+                regions.append((x0, y0, x1, y1, self._tip_text(slot, pat)))
+        self._tip.set_regions(regions)
+
+    def _draw_tile(self, c, slot, pat, x0, y0, x1, y1, selected, linked, drop, lifted):
+        missing = pat is None
+        empty = missing or pat.is_empty
+        if linked:
+            fill = SELECT_GREEN
+        elif empty:
+            fill = BG_INPUT if not missing else BG_DARK
+        else:
+            fill = BG_PANEL
+        if drop:
+            outline, w = ACCENT_ORANGE, 2
+        elif selected:
+            outline, w = ACCENT_BLUE, 2
+        elif linked:
+            outline, w = ACCENT_GREEN, 1
+        else:
+            outline, w = (BORDER_COLOR if empty else BORDER_LIGHT), 1
+        dash = (2, 2) if missing else None
+        c.create_rectangle(x0 + 0.5, y0 + 0.5, x1 - 0.5, y1 - 0.5, fill=fill,
+                           outline=outline, width=w, dash=dash)
+        label_col = FG_MUTED if empty else FG_TEXT
+        if lifted:
+            label_col = BORDER_LIGHT
+        num_w = sc(16)
+        c.create_text(x0 + sc(3), (y0 + y1) / 2, text=f"{slot[1]:02d}", anchor="w",
+                      fill=label_col, font=ui_font(7, "bold"))
+        if empty or lifted:
+            return
+        # A step-activity bar: one tick per step of the pattern's length,
+        # lit where anything plays. Two patterns with the same tempo and
+        # length still look different at a glance.
+        steps = max(1, min(pat.length, len(pat.step_parts)))
+        bx0, bx1 = x0 + num_w + sc(3), x1 - sc(3)
+        if bx1 - bx0 < steps:
+            steps = max(1, int(bx1 - bx0))
+        by0, by1 = y0 + sc(5), y1 - sc(5)
+        step_w = (bx1 - bx0) / steps
+        on_col = ACCENT_BLUE if selected else WAVE_COLOR
+        for i in range(steps):
+            hit = pat.step_parts[i] or pat.step_granular[i]
+            sx = bx0 + i * step_w
+            if hit:
+                c.create_rectangle(sx, by0, sx + max(1, step_w - 1), by1,
+                                   fill=on_col, outline="")
+            else:
+                c.create_line(sx, by1, sx + max(1, step_w - 1), by1, fill=BORDER_LIGHT)
+
+    @staticmethod
+    def _tip_text(slot, pat):
+        label = f"Pattern {pattern_slot_label(slot)}"
+        if pat is None:
+            return f"{label}\nNo file loaded for this slot."
+        if pat.is_empty:
+            return f"{label}\nEmpty pattern."
+        pads = " ".join(sorted(f"{b}{p}" for b, p in pat.used_pads()))
+        return (f"{label}  \u00b7  {pat.tempo:.1f} BPM  \u00b7  {pat.length} steps\n"
+                f"Samples: {pads or '-'}")
+
+    # ---- select / drag -------------------------------------------------
+
+    def _press(self, event):
+        self._press_at = (event.x, event.y)
+        self._drag_slot = self.slot_at(event.x, event.y)
+        self._dragging = False
+
+    def _motion(self, event):
+        if self._drag_slot is None or self._press_at is None:
+            return
+        started = False
+        if not self._dragging:
+            dx, dy = event.x - self._press_at[0], event.y - self._press_at[1]
+            if dx * dx + dy * dy < 36:
+                return
+            self._dragging = started = True
+            x0, y0, x1, y1 = self._rects[self._drag_slot]
+            self.app.drag_ghost().show(int(x1 - x0), int(y1 - y0),
+                                       pattern_slot_label(self._drag_slot))
+        self.app.drag_ghost().move_to(event.x_root, event.y_root)
+        hovered = self.slot_at(event.x, event.y)
+        hovered = hovered if hovered != self._drag_slot else None
+        if hovered != self._drop_slot or started:
+            self._drop_slot = hovered
+            self.redraw()
+
+    def _release(self, event):
+        source, was_dragging = self._drag_slot, self._dragging
+        self._drag_slot = None
+        self._dragging = False
+        self._press_at = None
+        self._drop_slot = None
+        if was_dragging:
+            self.app.drag_ghost().hide()
+            target = self.slot_at(event.x, event.y)
+            if source and target and target != source:
+                self.app.swap_patterns(source, target)
+                return
+            self.redraw()
+            return
+        if source:
+            self.app.select_pattern(source)
+
+
+class PatternInfoCard:
+    """The one selected pattern, in full: tempo, length, what it plays.
+
+    Only the selected pattern gets this much room, so the 64 tiles can stay
+    small enough to leave the sample grid its space.
+    """
+
+    WIDTH = 330
+
+    def __init__(self, parent, app):
+        self.app = app
+        self.canvas = tk.Canvas(parent, bg=BG_DARK, highlightthickness=0,
+                                width=sc(self.WIDTH), height=10)
+        self.canvas.bind("<Configure>", lambda _e: self.redraw())
+
+    def pack(self, **kw):
+        self.canvas.pack(**kw)
+
+    def redraw(self):
+        c = self.canvas
+        c.delete("all")
+        w, h = max(c.winfo_width(), 1), max(c.winfo_height(), 1)
+        if w < 20 or h < 20:
+            return
+        pad = sc(10)
+        _canvas_round_fill(c, 0, 0, w - 1, h - 1, sc(10), BG_PANEL)
+        _canvas_round_outline(c, 0, 0, w - 1, h - 1, sc(10), BORDER_LIGHT)
+
+        slot = self.app.selected_pattern
+        pat = self.app.patterns.get(slot) if slot else None
+        if not self.app.patterns:
+            c.create_text(w / 2, h / 2, text="No patterns loaded.\nUse \u201cLoad\u2026\u201d "
+                          "on a P-6 BACKUP folder.", fill=FG_MUTED,
+                          font=ui_font(9), justify="center")
+            return
+        if slot is None:
+            c.create_text(w / 2, h / 2, text="Click a pattern to see it here.",
+                          fill=FG_MUTED, font=ui_font(9))
+            return
+
+        y = pad
+        c.create_text(pad, y, text=f"Pattern {pattern_slot_label(slot)}", anchor="nw",
+                      fill=ACCENT_BLUE, font=ui_font(11, "bold"))
+        if pat is None:
+            c.create_text(pad, y + sc(24), text="No file for this slot.", anchor="nw",
+                          fill=FG_MUTED, font=ui_font(9))
+            return
+        if pat.is_empty:
+            c.create_text(w - pad, y + sc(2), text="EMPTY", anchor="ne",
+                          fill=FG_MUTED, font=ui_font(8, "bold"))
+
+        # Big numbers: tempo and length are what tell patterns apart.
+        y += sc(22)
+        x = pad
+        for big, small in ((f"{pat.tempo:.1f}", "BPM"), (str(pat.length), "steps")):
+            item = c.create_text(x, y, text=big, anchor="nw", fill=FG_TEXT,
+                                 font=ui_font(15, "bold"))
+            bx = c.bbox(item)[2]
+            c.create_text(bx + sc(3), y + sc(7), text=small, anchor="nw",
+                          fill=FG_MUTED, font=ui_font(8))
+            x = bx + sc(3) + sc(40)
+        small_vals = [("Shuffle", pat.value("SHUFFLE", "-")),
+                      ("Level", pat.value("LEVEL", "-")),
+                      ("Transp.", pat.value("TRANSPOSE", "-")),
+                      ("Scale", pat.value("SCALE", "-"))]
+        sx = max(x, w * 0.52)
+        col_w = (w - pad - sx) / 2
+        for i, (name, val) in enumerate(small_vals):
+            cx = sx + (i % 2) * col_w
+            cy = y + (i // 2) * sc(13)
+            item = c.create_text(cx, cy, text=name, anchor="nw", fill=FG_MUTED,
+                                 font=ui_font(7))
+            c.create_text(c.bbox(item)[2] + sc(3), cy, text=str(val), anchor="nw",
+                          fill=FG_TEXT, font=ui_font(7, "bold"))
+
+        # Step view: one cell per step of the pattern's length.
+        y += sc(30)
+        steps = max(1, min(pat.length, len(pat.step_parts)))
+        per_row = 16 if steps > 16 else steps
+        rows = (steps + per_row - 1) // per_row
+        cell_gap = sc(2)
+        cell_w = (w - 2 * pad - cell_gap * (per_row - 1)) / per_row
+        cell_h = max(sc(4), min(sc(9), (sc(24) - (rows - 1) * cell_gap) / rows))
+        for i in range(steps):
+            r, col = divmod(i, per_row)
+            cx = pad + col * (cell_w + cell_gap)
+            cy = y + r * (cell_h + cell_gap)
+            if pat.step_parts[i]:
+                fill = ACCENT_BLUE
+            elif pat.step_granular[i]:
+                fill = ACCENT_PURPLE
+            else:
+                fill = BG_INPUT
+            c.create_rectangle(cx, cy, cx + cell_w, cy + cell_h, fill=fill, outline="")
+        y += rows * (cell_h + cell_gap) + sc(4)
+
+        # The samples it plays, as chips, most-used first - and a mark on a
+        # part the pattern mutes.
+        chips = sorted(pat.part_counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        x = pad
+        label = c.create_text(x, y, text="Samples", anchor="nw", fill=FG_MUTED,
+                              font=ui_font(7))
+        x = c.bbox(label)[2] + sc(6)
+        if not chips and not pat.granular_count:
+            c.create_text(x, y, text="none", anchor="nw", fill=FG_MUTED, font=ui_font(7))
+        for part, count in chips:
+            muted = part in pat.muted_parts
+            text = f"{pad_name_for_part(part)} \u00d7{count}" + (" M" if muted else "")
+            # Red when that pad is empty in the app: the pattern would play
+            # nothing there, which is usually a sample that went elsewhere.
+            where = pad_for_part(part)
+            state = self.app._get_pad_state(*where) if where else None
+            fg = FG_TEXT if (state or {}).get("filepath") else ACCENT_RED
+            x = self._chip(c, x, y, text, SELECT_GREEN, fg, w - pad)
+            if x is None:
+                break
+        if pat.granular_count and x is not None:
+            src = pad_name_for_part(pat.granular_source)
+            self._chip(c, x, y, f"Gran {src} \u00d7{pat.granular_count}",
+                       BG_INPUT, ACCENT_PURPLE, w - pad)
+
+    @staticmethod
+    def _chip(c, x, y, text, bg, fg, right):
+        item = c.create_text(x + sc(4), y, text=text, anchor="nw", fill=fg,
+                             font=ui_font(7, "bold"))
+        x0, y0, x1, y1 = c.bbox(item)
+        if x1 + sc(4) > right:
+            c.delete(item)
+            c.create_text(x, y, text="\u2026", anchor="nw", fill=FG_MUTED,
+                          font=ui_font(7, "bold"))
+            return None
+        rect = c.create_rectangle(x, y0 - 1, x1 + sc(4), y1 + 1, fill=bg, outline="")
+        c.tag_lower(rect, item)
+        return x1 + sc(8)
+
+
+def _canvas_round_fill(c, x1, y1, x2, y2, r, color):
+    """Filled counterpart of _canvas_round_outline."""
+    r = max(0, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
+    c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=color, outline="")
+    c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=color, outline="")
+    for x, y in ((x1, y1), (x2 - 2 * r, y1), (x1, y2 - 2 * r), (x2 - 2 * r, y2 - 2 * r)):
+        c.create_oval(x, y, x + 2 * r, y + 2 * r, fill=color, outline="")
+
+
 class P6ManagerApp:
     def __init__(self, root):
         global _DND_APP
@@ -27666,6 +28327,20 @@ class P6ManagerApp:
         self.overview_container = None
         self.overview_slots = {}
         self._drag_ghost = None
+        # Patterns: {slot: P6Pattern}, only ever filled by "Load" in the
+        # all-banks + patterns view. Part of every undo snapshot, since a pad
+        # swap with sync on rewrites them.
+        self.patterns = {}
+        self.pattern_source_dir = None
+        self.selected_pattern = None
+        self._patterns_dirty = False
+        # Which way the pattern <-> pad highlight points: "pattern" lights
+        # the pads the selected pattern plays, "sample" lights the patterns
+        # that play the selected pad. Whichever was clicked last.
+        self._pattern_focus = "pattern"
+        self.pattern_panel = None
+        self.pattern_sync_var = tk.BooleanVar(
+            value=bool(load_config().get("pattern_sync", False)))
 
         # Status bar - packed FIRST with side="bottom" so it reliably keeps
         # its spot at the very bottom of the window regardless of how the
@@ -27691,12 +28366,14 @@ class P6ManagerApp:
         self.view_menu = RoundedDropdown(
             top, self.view_var, list(self.VIEW_LABELS.values()),
             command=self._on_view_menu, parent_bg=BG_DARK,
-            width=104, height=30, font=ui_font(9, "bold"))
+            width=172, height=30, font=ui_font(9, "bold"))
         self.view_menu.pack(side="left", padx=(2, 8))
         add_tooltip(self.view_menu,
                     "Single bank: 6 pads with rate, pitch and Mono each. All banks: all "
     "8 at once, 6 per row, stripped to the waveform and Load / Play / "
-    "Eject / Chop / Synth. A violet stripe marks a mono export.")
+    "Eject / Chop / Synth. A violet stripe marks a mono export. All banks + "
+    "patterns: the same grid slimmed to waveform and Play, with the P-6's 64 "
+    "patterns underneath.")
 
         # Only meaningful in the all-banks view, so it is packed and
         # unpacked alongside it. The compact pads have no free surface left
@@ -28611,11 +29288,16 @@ class P6ManagerApp:
         # end up correct in one of them and stale in the other.
         for cell in self.overview_slots.values():
             cell.refresh_highlight()
+        # The pattern strip lights the patterns that play the framed pad.
+        if self._patterns_on_screen():
+            self.pattern_strip.redraw()
 
     def set_active_pad(self, pad):
         """Moves the single blue frame to `pad`. Called whenever a pad
         becomes the one the user is looking at."""
         self._wave_view_pad = pad
+        if pad is not None:
+            self._pattern_focus = "sample"
         self._clear_all_pad_highlights()
 
     def highlight_playing_pad(self, pad):
@@ -28624,6 +29306,8 @@ class P6ManagerApp:
         drag-hover highlight, distinct color so the two are never confused."""
         self._currently_playing_pad = pad
         self._wave_view_pad = pad
+        if pad is not None:
+            self._pattern_focus = "sample"
         self._clear_all_pad_highlights()
         self._refresh_playing_pad_button()
 
@@ -28676,11 +29360,14 @@ class P6ManagerApp:
         state_b = self.pad_widgets[pad_b].get_state()
         self.pad_widgets[pad_a].apply_state(state_b)
         self.pad_widgets[pad_b].apply_state(state_a)
+        changed = self._sync_patterns_with_pad_moves(
+            [((self._active_bank, pad_a), (self._active_bank, pad_b))])
         self._retarget_display_after_swap((self._active_bank, pad_a),
                                            (self._active_bank, pad_b))
         self.update_storage_display()
         self.update_pad_warnings()
-        self.show_status(f"Swapped PAD_{pad_a} and PAD_{pad_b}.")
+        self.show_status(f"Swapped PAD_{pad_a} and PAD_{pad_b}."
+                         + self._patterns_note(changed))
 
     def _setup_dnd_targets(self, event=None):
         """Registers the drop target(s) once the window is actually mapped
@@ -28747,7 +29434,7 @@ class P6ManagerApp:
         """Which pad is under the cursor during a file drag, in whichever
         view is on screen: a pad number in the single-bank view, a
         (bank, pad) pair in the all-banks view."""
-        if self._view_mode == "all":
+        if self._is_overview():
             return self.compact_cell_at_screen_pos(x_root, y_root)
         return self._pad_at_screen_pos(x_root, y_root)
 
@@ -28757,7 +29444,7 @@ class P6ManagerApp:
         # answers is "where will this land", and that is the same question
         # either way - while the source is never in doubt, since the user is
         # the one dragging.
-        if self._view_mode == "all":
+        if self._is_overview():
             for key, cell in self.overview_slots.items():
                 cell.set_drop_highlight(key == target, color=ACCENT_ORANGE)
             return
@@ -28825,7 +29512,7 @@ class P6ManagerApp:
 
         self.stop_playback_waveform()
         self._push_undo()
-        if self._view_mode == "all":
+        if self._is_overview():
             # The files are written through the live pad widgets, which only
             # ever hold one bank, so the dropped-on row has to be made
             # active first - the same detour every other overview action
@@ -28846,7 +29533,7 @@ class P6ManagerApp:
             if target_num > len(PADS):
                 break
             self.pad_widgets[target_num].set_file(path)
-        if self._view_mode == "all":
+        if self._is_overview():
             self._save_active_bank_state()
             self.refresh_overview()
         return "break"
@@ -28864,6 +29551,11 @@ class P6ManagerApp:
         return {
             "slots": copy.deepcopy(self.slots),
             "force_mono": {b: v.get() for b, v in self.force_mono_vars.items()},
+            # Shallow on purpose: P6Pattern is immutable, so the snapshot can
+            # share the objects - only the slot -> pattern map is copied.
+            "patterns": dict(self.patterns),
+            "pattern_source_dir": self.pattern_source_dir,
+            "selected_pattern": self.selected_pattern,
         }
 
     def _push_undo(self):
@@ -28884,6 +29576,13 @@ class P6ManagerApp:
         for bank, value in snapshot["force_mono"].items():
             if bank in self.force_mono_vars:
                 self.force_mono_vars[bank].set(value)
+        patterns = snapshot.get("patterns", {})
+        if patterns.keys() != self.patterns.keys() or any(
+                patterns[k] is not self.patterns[k] for k in patterns):
+            self._patterns_dirty = bool(patterns)
+        self.patterns = dict(patterns)
+        self.pattern_source_dir = snapshot.get("pattern_source_dir")
+        self.selected_pattern = snapshot.get("selected_pattern")
         self.build_pad_slots(self.current_bank.get())
         self.update_storage_display()
         self.update_pad_warnings()
@@ -29353,7 +30052,7 @@ class P6ManagerApp:
         # appears once bank F happens to be the current one. _get_pad_state()
         # already reads live from the widgets for the active bank and from
         # the snapshot for the rest, so this needs no special casing.
-        all_banks = (self._view_mode == "all")
+        all_banks = (self._is_overview())
         banks = list(BANKS) if all_banks else [self.current_bank.get()]
         messages = []
         for bank in banks:
@@ -29590,7 +30289,7 @@ class P6ManagerApp:
 
         self.total_size_label.config(text=f"{total_mb:.2f} MB", fg=ACCENT_RED if total_over else FG_TEXT)
 
-        if self._view_mode == "all":
+        if self._is_overview():
             # No current bank in this view. The line stays in place, greyed
             # out, rather than disappearing and resizing the panel.
             self.bank_col_title.config(fg=BORDER_LIGHT)
@@ -29618,7 +30317,13 @@ class P6ManagerApp:
     # ------------------------------------------------------------------
 
     OVERVIEW_LABEL_W = 42
-    VIEW_LABELS = {"single": "Single bank", "all": "All banks"}
+    VIEW_LABELS = {"single": "Single bank", "all": "All banks",
+                   "patterns": "All banks + patterns"}
+
+    def _is_overview(self):
+        """Both all-banks views share the 8x6 grid and everything that
+        hangs off it (drag mode, per-row Mono, all-bank warnings)."""
+        return self._view_mode in ("all", "patterns")
 
     def _on_view_menu(self, label):
         for mode, text in self.VIEW_LABELS.items():
@@ -29724,8 +30429,14 @@ class P6ManagerApp:
         """
         if mode == self._view_mode:
             return
+        was_overview = self._is_overview()
         self._view_mode = mode
-        if mode == "all":
+        if was_overview and self._is_overview():
+            # All banks <-> All banks + patterns: same grid, only the strip
+            # and the cells' layout change.
+            self._show_pattern_panel(mode == "patterns")
+            self.refresh_overview()
+        elif self._is_overview():
             # The active bank's unsaved edits have to reach self.slots before
             # the overview reads from it, or the row for the current bank
             # would show the last-saved state instead of what is on screen.
@@ -29743,12 +30454,14 @@ class P6ManagerApp:
             # went once the view goes back.
             self.bank_menu.set_enabled(False)
             self.bank_lbl.config(fg=FG_MUTED)
+            self._show_pattern_panel(mode == "patterns")
             self.refresh_overview()
         else:
             # Drag mode has no meaning outside the overview, and leaving it
             # armed would strand the pads in their grey state.
             if self.drag_mode:
                 self.toggle_drag_mode()
+            self._show_pattern_panel(False)
             self.overview_container.pack_forget()
             self.drag_btn.pack_forget()
             self.pad_container.pack(fill="x", pady=(6, 0), before=self.storage_outer)
@@ -29861,13 +30574,16 @@ class P6ManagerApp:
         """Redraws every cell from self.slots. A no-op while the overview is
         not on screen, so the callers that fire on any pad change (bank
         switch, undo, preset load) cost nothing in the single-bank view."""
-        if self._view_mode != "all" or not self.overview_slots:
+        if not self._is_overview() or not self.overview_slots:
             return
         for bank in BANKS:
             self._refresh_mono_btn(bank)
             self.overview_bank_labels[bank].config(fg=self._bank_label_color(bank))
             for pad in PADS:
                 self.overview_slots[(bank, pad)].refresh()
+        # The card marks a pattern's pads that are empty here, so a pad
+        # change anywhere can change it.
+        self._refresh_patterns_ui()
 
     def refresh_overview_pad(self, bank, pad):
         """Redraws ONE cell of the all-banks grid.
@@ -29881,7 +30597,7 @@ class P6ManagerApp:
         cannot alter any other pad. Like refresh_overview() this is free
         while the grid is not on screen.
         """
-        if self._view_mode != "all" or not self.overview_slots:
+        if not self._is_overview() or not self.overview_slots:
             return
         cell = self.overview_slots.get((bank, pad))
         if cell is None:
@@ -29943,7 +30659,7 @@ class P6ManagerApp:
         pixels tall at its handle and 900 wide as a target, and asking
         someone to hit the handle both ways would be needlessly fussy.
         """
-        if self._view_mode != "all":
+        if not self._is_overview():
             return None
         cell = self.compact_cell_at_screen_pos(x_root, y_root)
         if cell:
@@ -29980,6 +30696,8 @@ class P6ManagerApp:
         self._push_undo()
         self._save_active_bank_state()
         self.slots[bank_a], self.slots[bank_b] = self.slots[bank_b], self.slots[bank_a]
+        changed = self._sync_patterns_with_pad_moves(
+            [((bank_a, pad), (bank_b, pad)) for pad in PADS])
         var_a, var_b = self.force_mono_vars[bank_a], self.force_mono_vars[bank_b]
         was_a, was_b = var_a.get(), var_b.get()
         var_a.set(was_b)
@@ -29994,7 +30712,8 @@ class P6ManagerApp:
         self.update_storage_display()
         self.update_pad_warnings()
         self.refresh_overview()
-        self.show_status(f"Swapped banks {bank_a} and {bank_b}.")
+        self.show_status(f"Swapped banks {bank_a} and {bank_b}."
+                         + self._patterns_note(changed))
 
     def _refresh_mono_btn(self, bank):
         btn = getattr(self, "overview_mono_btns", {}).get(bank)
@@ -30078,7 +30797,7 @@ class P6ManagerApp:
 
     def compact_cell_at_screen_pos(self, x_root, y_root):
         """Which (bank, pad) contains these absolute screen coordinates."""
-        if self._view_mode != "all":
+        if not self._is_overview():
             return None
         for key, cell in self.overview_slots.items():
             outer = cell.outer
@@ -30115,6 +30834,7 @@ class P6ManagerApp:
         self._save_active_bank_state()
         self.slots[bank_a][pad_a], self.slots[bank_b][pad_b] = \
             self.slots[bank_b][pad_b], self.slots[bank_a][pad_a]
+        changed = self._sync_patterns_with_pad_moves([((bank_a, pad_a), (bank_b, pad_b))])
         self.build_pad_slots(self._active_bank)
         # Same rule as the single-bank swap: the frame and the Stop button
         # follow the sample to its new pad, or are released if it left the
@@ -30122,7 +30842,344 @@ class P6ManagerApp:
         # the swapped content when the frame is repainted onto them.
         self._retarget_display_after_swap((bank_a, pad_a), (bank_b, pad_b))
         self.refresh_overview()
-        self.show_status(f"Swapped {bank_a}{pad_a} and {bank_b}{pad_b}.")
+        self.show_status(f"Swapped {bank_a}{pad_a} and {bank_b}{pad_b}."
+                         + self._patterns_note(changed))
+
+    # ---- patterns ------------------------------------------------------
+
+    def _build_pattern_panel(self):
+        """The strip of 64 patterns plus the card for the selected one.
+        Built on first use, like the overview grid it sits under."""
+        outer = tk.Frame(self.root, padx=14, bg=BG_DARK)
+        self.pattern_panel = outer
+
+        head = tk.Frame(outer, bg=BG_DARK)
+        head.pack(fill="x", pady=(8, 2))
+        title = tk.Label(head, text="Patterns")
+        style_label(title, bg=BG_DARK, fg=ACCENT_BLUE, font=ui_font(10, "bold"))
+        title.pack(side="left")
+
+        load_btn = RoundedButton(head, text="Load\u2026", command=self.load_patterns_dialog,
+                                 bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK,
+                                 width=64, height=24, radius=7, font=ui_font(8, "bold"))
+        load_btn.pack(side="left", padx=(10, 0))
+        add_tooltip(load_btn,
+                    "Load the P-6's patterns (P6_PTN1-01.PRM \u2026 P6_PTN4-16.PRM) from a "
+                    "backup folder. The files themselves are never changed.")
+        self.pattern_save_btn = RoundedButton(
+            head, text="Save\u2026", command=self.save_patterns_dialog,
+            bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=64, height=24, radius=7,
+            font=ui_font(8, "bold"), state="disabled")
+        self.pattern_save_btn.pack(side="left", padx=(4, 0))
+        add_tooltip(self.pattern_save_btn,
+                    "Write the patterns, in their new order and with their new pad "
+                    "numbers, to another folder - for example the P-6's RESTORE folder.")
+
+        sync_cb = tk.Checkbutton(head, text="Sync patterns with pad moves",
+                                 variable=self.pattern_sync_var,
+                                 command=self._on_pattern_sync_changed)
+        style_checkbutton(sync_cb, bg=BG_DARK)
+        sync_cb.pack(side="left", padx=(14, 0))
+        add_tooltip(sync_cb,
+                    "When on, swapping or moving pads (or whole banks) also rewrites "
+                    "every loaded pattern, so each pattern keeps playing the same "
+                    "samples at their new addresses. Ctrl+Z undoes both together.")
+
+        self.pattern_dirty_label = tk.Label(head, text="")
+        style_label(self.pattern_dirty_label, bg=BG_DARK, fg=ACCENT_ORANGE,
+                    font=ui_font(8, "bold"))
+        self.pattern_dirty_label.pack(side="right")
+        self.pattern_source_label = tk.Label(head, text="", anchor="e")
+        style_label(self.pattern_source_label, bg=BG_DARK, fg=FG_MUTED, font=ui_font(8))
+        self.pattern_source_label.pack(side="right", padx=(10, 8), fill="x", expand=True)
+
+        body = tk.Frame(outer, bg=BG_DARK)
+        body.pack(fill="x")
+        self.pattern_info = PatternInfoCard(body, self)
+        self.pattern_info.pack(side="right", fill="y", padx=(10, 0))
+        self.pattern_strip = PatternStrip(body, self)
+        self.pattern_strip.pack(side="left", fill="x", expand=True)
+
+    def _show_pattern_panel(self, on):
+        if on:
+            if self.pattern_panel is None:
+                self._build_pattern_panel()
+            # Packed after the grid (already in place) and before the storage
+            # panel, so it lands between the two.
+            self.pattern_panel.pack(fill="x", before=self.storage_outer)
+        elif self.pattern_panel is not None:
+            self.pattern_panel.pack_forget()
+        for cell in self.overview_slots.values():
+            cell.set_slim(on)
+        if on:
+            self._refresh_patterns_ui()
+
+    def _patterns_on_screen(self):
+        return self._view_mode == "patterns" and self.pattern_panel is not None
+
+    def _refresh_patterns_ui(self):
+        """Strip, card and header line. Free while the view is not up."""
+        if not self._patterns_on_screen():
+            return
+        self.pattern_strip.redraw()
+        self.pattern_info.redraw()
+        self.pattern_save_btn.config_state("normal" if self.patterns else "disabled")
+        if self.pattern_source_dir:
+            count = sum(1 for p in self.patterns.values() if p is not None)
+            self.pattern_source_label.config(
+                text=f"{count} from {self.pattern_source_dir}")
+        else:
+            self.pattern_source_label.config(text="")
+        self.pattern_dirty_label.config(
+            text="\u25cf unsaved changes" if self._patterns_dirty else "")
+
+    def _refresh_pattern_links(self):
+        """After the selection or the focus moved: the green marks on both
+        sides, and the card."""
+        if not self._patterns_on_screen():
+            return
+        for cell in self.overview_slots.values():
+            cell.refresh_highlight()
+        self._refresh_patterns_ui()
+
+    def _set_patterns_dirty(self, dirty):
+        self._patterns_dirty = dirty
+        self._refresh_patterns_ui()
+
+    def is_pattern_linked_pad(self, bank, pad):
+        """Whether the selected pattern plays this pad - the pad side of the
+        pattern -> samples highlight."""
+        if self._view_mode != "patterns" or self._pattern_focus != "pattern":
+            return False
+        pat = self.patterns.get(self.selected_pattern) if self.selected_pattern else None
+        return pat is not None and (bank, pad) in pat.used_pads()
+
+    def patterns_linked_to_focus(self):
+        """The pattern side: every slot whose pattern plays the selected pad."""
+        if self._view_mode != "patterns" or self._pattern_focus != "sample":
+            return set()
+        pad = getattr(self, "_wave_view_pad", None)
+        bank = self._active_bank
+        if pad is None or bank is None:
+            return set()
+        return {slot for slot, pat in self.patterns.items()
+                if pat is not None and (bank, pad) in pat.used_pads()}
+
+    def select_pattern(self, slot):
+        self.selected_pattern = slot
+        self._pattern_focus = "pattern"
+        self._refresh_pattern_links()
+
+    def swap_patterns(self, slot_a, slot_b):
+        """Swaps two pattern slots. An empty slot is just a slot with
+        nothing in it, so dropping onto one is a move."""
+        if slot_a == slot_b:
+            return
+        self._push_undo()
+        pat_a, pat_b = self.patterns.get(slot_a), self.patterns.get(slot_b)
+        for slot, pat in ((slot_a, pat_b), (slot_b, pat_a)):
+            if pat is None:
+                self.patterns.pop(slot, None)
+            else:
+                self.patterns[slot] = pat
+        # The selection follows the pattern, not the slot: it is the thing
+        # that was just picked up.
+        if self.selected_pattern == slot_a:
+            self.selected_pattern = slot_b
+        elif self.selected_pattern == slot_b:
+            self.selected_pattern = slot_a
+        self._pattern_focus = "pattern"
+        self._patterns_dirty = True
+        self._refresh_pattern_links()
+        a, b = pattern_slot_label(slot_a), pattern_slot_label(slot_b)
+        if pat_b is None:
+            self.show_status(f"Moved pattern {a} to {b}.")
+        else:
+            self.show_status(f"Swapped patterns {a} and {b}.")
+
+    def _sync_patterns_with_pad_moves(self, pairs, swap=True):
+        """Rewrites the loaded patterns after pads moved, if sync is on.
+
+        `pairs` is [((bank, pad), (bank, pad)), ...]. swap=True means each
+        pair traded places; swap=False means the first moved onto the second
+        (Move To bank). Call it AFTER _push_undo(), so the snapshot holds
+        the patterns as they were and one Ctrl+Z restores pads and patterns
+        together. Returns how many patterns changed.
+        """
+        if not self.patterns or not self.pattern_sync_var.get():
+            return 0
+        mapping = {}
+        for a, b in pairs:
+            pa, pb = part_for_pad(*a), part_for_pad(*b)
+            mapping[pa] = pb
+            if swap:
+                mapping[pb] = pa
+        self.patterns, changed = remap_patterns(self.patterns, mapping)
+        if changed:
+            self._patterns_dirty = True
+        self._refresh_pattern_links()
+        return changed
+
+    @staticmethod
+    def _patterns_note(changed):
+        if not changed:
+            return ""
+        return f" {changed} pattern{'s' if changed != 1 else ''} updated."
+
+    def _on_pattern_sync_changed(self):
+        on = bool(self.pattern_sync_var.get())
+        save_config_value("pattern_sync", on)
+        self.show_status("Pad moves now update the patterns." if on else
+                         "Pad moves no longer touch the patterns.", kind="info")
+
+    def load_patterns_dialog(self):
+        cfg = load_config()
+        initial = cfg.get("last_pattern_dir")
+        if not (initial and os.path.isdir(initial)):
+            initial = os.path.dirname(self.import_root) if self.import_root else None
+        picker = FolderPickerDialog(self.root, initial_dir=initial,
+                                    title="Select the P-6 BACKUP Folder (patterns)")
+        self.root.wait_window(picker)
+        if picker.selected_dir:
+            self.load_patterns_from_folder(picker.selected_dir)
+
+    def load_patterns_from_folder(self, folder):
+        if self._patterns_dirty and self.patterns and not dark_askyesno(
+                "Replace Patterns?",
+                "The patterns on screen have changes that were not saved. Load "
+                "the new folder anyway? (Ctrl+Z brings them back.)", parent=self.root):
+            return
+        found_dir, files = find_pattern_files(folder)
+        if not files:
+            dark_showwarning("No Patterns Found",
+                             f"No pattern files (P6_PTN1-01.PRM \u2026 P6_PTN4-16.PRM) in\n"
+                             f"{folder}\nor in the folders directly inside it.",
+                             parent=self.root)
+            return
+        loaded, errors = {}, []
+        for slot, path in sorted(files.items()):
+            try:
+                loaded[slot] = P6Pattern.from_file(path)
+            except Exception as e:
+                errors.append(f"{os.path.basename(path)}: {e}")
+        self._push_undo()
+        self.patterns = loaded
+        self.pattern_source_dir = found_dir
+        self.selected_pattern = None
+        self._pattern_focus = "pattern"
+        self._patterns_dirty = False
+        save_config_value("last_pattern_dir", folder)
+        self._refresh_pattern_links()
+        missing = len(PATTERN_SLOTS) - len(loaded)
+        note = f" {missing} slot{'s' if missing != 1 else ''} had no file." if missing else ""
+        self.show_status(f"Loaded {len(loaded)} patterns.{note}")
+        if errors:
+            dark_showwarning("Some Patterns Could Not Be Read",
+                             "\n".join(errors[:12]), parent=self.root)
+
+    def save_patterns_dialog(self):
+        if not self.patterns:
+            return
+        cfg = load_config()
+        initial = cfg.get("last_pattern_save_dir")
+        if not (initial and os.path.isdir(initial)):
+            initial = os.path.dirname(self.pattern_source_dir or "") or None
+        picker = FolderPickerDialog(self.root, initial_dir=initial,
+                                    title="Save Patterns To (e.g. the P-6 RESTORE folder)")
+        self.root.wait_window(picker)
+        target = picker.selected_dir
+        if not target:
+            return
+        if self.pattern_source_dir and os.path.normcase(os.path.abspath(target)) == \
+                os.path.normcase(os.path.abspath(self.pattern_source_dir)):
+            dark_showwarning("Pick Another Folder",
+                             "That is the folder the patterns were loaded from. Save "
+                             "them somewhere else - the P-6's RESTORE folder, or a new "
+                             "folder - so the original backup stays as it was.",
+                             parent=self.root)
+            return
+        save_config_value("last_pattern_save_dir", target)
+        self.save_patterns_to_folder(target)
+
+    def save_patterns_to_folder(self, target):
+        """Writes every slot as P6_PTN<b>-<nn>.PRM into `target`.
+
+        A pattern file already in the folder for a slot that is now empty
+        would be restored as if it belonged there, so those are removed -
+        after saying so. The source folder's other files (anything that is
+        not a pattern) can come along, so the folder is a whole backup."""
+        existing = {}
+        try:
+            for name in os.listdir(target):
+                m = PATTERN_FILE_RE.match(name)
+                if m:
+                    existing.setdefault((int(m.group(1)), int(m.group(2))), []).append(name)
+        except OSError as e:
+            dark_showerror("Cannot Save Patterns", f"Could not read {target}:\n{e}",
+                           parent=self.root)
+            return
+        to_write = {slot: pat for slot, pat in self.patterns.items() if pat is not None}
+        stale = [n for slot, names in existing.items() if slot not in to_write
+                 for n in names]
+        overwrite = sum(1 for slot in to_write if slot in existing)
+        empty_slots = len(PATTERN_SLOTS) - len(to_write)
+
+        lines = [f"Write {len(to_write)} pattern files to\n{target}"]
+        if overwrite:
+            lines.append(f"{overwrite} existing pattern file(s) there will be replaced.")
+        if stale:
+            lines.append(f"{len(stale)} pattern file(s) there belong to slots that are "
+                         f"now empty and will be deleted.")
+        if empty_slots:
+            lines.append(f"{empty_slots} slot(s) have no pattern file, so a restore "
+                         f"leaves whatever the P-6 has in them.")
+        if not dark_askyesno("Save Patterns?", "\n\n".join(lines) + "\n\nContinue?",
+                             parent=self.root):
+            return
+
+        others = []
+        src = self.pattern_source_dir
+        if src and os.path.isdir(src):
+            try:
+                others = [n for n in sorted(os.listdir(src))
+                          if os.path.isfile(os.path.join(src, n))
+                          and not PATTERN_FILE_RE.match(n)]
+            except OSError:
+                others = []
+        copy_others = bool(others) and dark_askyesno(
+            "Copy the Rest of the Backup?",
+            f"The folder the patterns came from also holds {len(others)} other "
+            f"file(s). Copy them too, so the new folder is a complete backup?",
+            parent=self.root)
+
+        errors = []
+        for slot, names in existing.items():
+            for name in names:
+                # Removes stale slots, and a same-slot file under a different
+                # spelling (p6_ptn1-01.prm) that would otherwise sit beside the
+                # new one on a case-sensitive disk.
+                if slot not in to_write or name != pattern_file_name(slot):
+                    try:
+                        os.remove(os.path.join(target, name))
+                    except OSError as e:
+                        errors.append(f"{name}: {e}")
+        for slot, pat in sorted(to_write.items()):
+            try:
+                pat.write(os.path.join(target, pattern_file_name(slot)))
+            except OSError as e:
+                errors.append(f"{pattern_file_name(slot)}: {e}")
+        if copy_others:
+            for name in others:
+                try:
+                    shutil.copy2(os.path.join(src, name), os.path.join(target, name))
+                except OSError as e:
+                    errors.append(f"{name}: {e}")
+        if errors:
+            dark_showerror("Some Files Were Not Written", "\n".join(errors[:12]),
+                           parent=self.root)
+            return
+        self._set_patterns_dirty(False)
+        self.show_status(f"Saved {len(to_write)} patterns to {os.path.basename(target)}.")
 
     def switch_bank(self, bank):
         self._save_active_bank_state()
@@ -30408,7 +31465,10 @@ class P6ManagerApp:
                     self._duplicate_wavetable_for(state)
         if target in self.force_mono_vars and source in self.force_mono_vars:
             self.force_mono_vars[target].set(self.force_mono_vars[source].get())
+        changed = 0
         if action == "move":
+            changed = self._sync_patterns_with_pad_moves(
+                [((source, pad), (target, pad)) for pad in PADS], swap=False)
             self.slots[source] = {p: None for p in PADS}
             if source in self.force_mono_vars:
                 self.force_mono_vars[source].set(False)
@@ -30423,7 +31483,7 @@ class P6ManagerApp:
         self.update_storage_display()
         self.update_pad_warnings()
         self.show_status(f"Bank {source} {'moved' if action == 'move' else 'copied'} "
-                         f"to {target}.")
+                         f"to {target}." + self._patterns_note(changed))
 
     def open_clear_banks_dialog(self):
         """Asks which banks to empty, then clears them in one undo step."""
