@@ -534,7 +534,9 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   switches to that one; **■ Stop** or playing a pad stops it. It is meant
   for recognising a pattern, not for reproducing the P-6 exactly:
   - **Timing** follows the pattern's tempo, length, scale and shuffle, and
-    each note's sub steps, probability and micro timing.
+    each note's length, micro timing and probability. A note held across
+    several steps (the P-6 stores it once per step) plays as one held
+    note, not as a new hit on every step.
   - **Chopped pads** (CHOP in the pad's `.PRM`) play one slice per key:
     C4 plays the first slice, C#4 the second and so on, as on the P-6.
   - **Other pads** play chromatically, with C4 at the sample's own pitch,

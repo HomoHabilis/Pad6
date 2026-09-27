@@ -28207,10 +28207,18 @@ def remap_patterns(patterns, mapping):
 # onto C4..D#9. Without a chop a note plays the sample chromatically, C4
 # being its own pitch.
 #
-# Some of the step fields are not documented anywhere and no device file
-# with them set has been available, so their units below are best guesses,
-# each in one constant: scale order, LENG and MT in ticks, SUB as extra
-# hits, PROB in tenths.
+# What the step fields mean was read off 35 patterns recorded on a P-6:
+#   LENG  gate as a percentage of one step (the default for a new note is
+#         80). A note held into the next step is written once PER STEP: the
+#         segment reaching the step's end (100, or 255 for a tie) continues
+#         in the next step's entry for the same pad and note. So 15 x 100
+#         followed by 80 is ONE note held for 15.8 steps, not 16 hits.
+#   MT    micro timing, also a percentage of a step (LENG counts from the
+#         shifted start, hence 125 with MT -25).
+#   PROB  10 is "always". Values above 10 turn up too and look like trigger
+#         conditions; those play every time here.
+#   NOTE  -1 with VELO 0 is an empty leftover, not a note.
+# Still guesses: the SCALE order, and SUB (never set in those patterns).
 # ---------------------------------------------------------------------------
 
 PREVIEW_SR = 44100
@@ -28219,24 +28227,18 @@ PREVIEW_MAX_CHOP = 64
 # SCALE -> length of one step in quarter notes. Index 1 (1/16) is what the
 # device's own cleared pattern holds.
 PATTERN_SCALE_BEATS = (0.5, 0.25, 0.125, 1.0 / 3, 1.0 / 6, 1.0 / 12)
-# LENG and MT count sequencer ticks. A pattern whose longest note is at most
-# this many units has its LENG read as counting steps instead (_gate_unit).
-PATTERN_TICKS_PER_STEP = 24
-PATTERN_STEP_UNIT_MAX = 16
+PATTERN_LENG_FULL = 100             # LENG / MT: percent of a step
+PATTERN_LENG_TIE = 255
 PATTERN_PROB_FULL = 10              # PROBn=10 is the default: always plays
 PATTERN_MAX_SUB_HITS = 8
 PREVIEW_MAX_VOICE_SECONDS = 20.0
 _STEP_FIELD_RE = re.compile(r"\b([A-Z]+)(\d+)=(-?\d+)")
 
 
-def pattern_step_notes(pattern):
-    """Every note in `pattern`, as dicts, in step order.
-
-    Sample notes carry "part"; granular notes carry part=GRANULAR_PART.
-    Steps past the pattern's length are left out - the device does not play
-    them either.
-    """
-    notes = []
+def _pattern_step_entries(pattern):
+    """{step index: [entry, ...]} for every real note segment in the steps
+    the pattern plays. Granular entries carry part=GRANULAR_PART."""
+    steps = {}
     for line in pattern.text.splitlines():
         m = _PATTERN_LINE_RE.match(line)
         if not m:
@@ -28256,20 +28258,84 @@ def pattern_step_notes(pattern):
             by_index.setdefault(int(idx), {})[name] = int(val)
         for idx in sorted(by_index):
             f = by_index[idx]
-            if granular:
-                if f.get("NOTE", -1) < 0:
-                    continue
-                part = GRANULAR_PART
-            else:
-                part = f.get("PART", -1)
-                if part < 0:
-                    continue
-            notes.append({
-                "step": step - 1, "part": part, "note": f.get("NOTE", -1),
+            part = GRANULAR_PART if granular else f.get("PART", -1)
+            if part < 0 or f.get("NOTE", -1) < 0:
+                continue
+            steps.setdefault(step - 1, []).append({
+                "step": step - 1, "part": part, "note": f["NOTE"],
                 "velo": f.get("VELO", 0), "leng": f.get("LENG", 0),
                 "sub": f.get("SUB", 0), "prob": f.get("PROB", PATTERN_PROB_FULL),
-                "mt": f.get("MT", 0),
+                "mt": f.get("MT", 0), "next": None, "prev": None,
             })
+    return steps
+
+
+def _segment_continues(e):
+    return (e["leng"] == PATTERN_LENG_TIE
+            or e["mt"] + e["leng"] >= PATTERN_LENG_FULL)
+
+
+def pattern_step_notes(pattern):
+    """Every note in `pattern`, in step order, with held notes joined up.
+
+    Each note is a dict with "step", "part", "note", "velo", "sub", "prob",
+    "mt" (percent of a step) and "steps": how long it is held, in steps,
+    counted from its (shifted) start. A note still held at the end of the
+    pattern carries on into its start again, as it does on the device."""
+    length = max(1, pattern.length)
+    steps = _pattern_step_entries(pattern)
+    for s in range(length):
+        nxt = steps.get((s + 1) % length, [])
+        for e in steps.get(s, []):
+            if not _segment_continues(e):
+                continue
+            for cand in nxt:
+                if (cand["prev"] is None and cand is not e
+                        and cand["part"] == e["part"] and cand["note"] == e["note"]):
+                    e["next"], cand["prev"] = cand, e
+                    break
+
+    def last_part(e):
+        leng = PATTERN_LENG_FULL if e["leng"] == PATTERN_LENG_TIE else e["leng"]
+        return max(leng, 1) / 100.0
+
+    def held(head):
+        """Steps from the head's shifted start to the end of its last
+        segment. LENG counts from the note's own start, so a lone segment
+        is just its LENG; every segment after the head fills its step up
+        to the last one."""
+        if head["next"] is None:
+            if head["leng"] == PATTERN_LENG_TIE:
+                return max(PATTERN_LENG_FULL - head["mt"], 1) / 100.0
+            return last_part(head)
+        total = (PATTERN_LENG_FULL - head["mt"]) / 100.0
+        e = head["next"]
+        while e["next"] is not None:
+            total += 1.0
+            e = e["next"]
+        return total + last_part(e)
+
+    notes, done = [], set()
+    for s in range(length):
+        for e in steps.get(s, []):
+            if e["prev"] is not None:
+                continue
+            e2 = e
+            while e2 is not None:
+                done.add(id(e2))
+                e2 = e2["next"]
+            notes.append(dict(e, steps=held(e), next=None, prev=None))
+    # What is left are chains with no start: a note held round the whole loop.
+    for s in range(length):
+        for e in steps.get(s, []):
+            if id(e) in done:
+                continue
+            e2 = e
+            while id(e2) not in done:
+                done.add(id(e2))
+                e2 = e2["next"]
+            notes.append(dict(e, steps=float(length), next=None, prev=None))
+    notes.sort(key=lambda n: n["step"])
     return notes
 
 
@@ -28466,14 +28532,6 @@ class PadVoice:
         return out * (env * vel)[:, None]
 
 
-def _gate_unit(notes, step_s):
-    """Seconds per LENG unit (see PATTERN_TICKS_PER_STEP)."""
-    longest = max((n["leng"] for n in notes), default=0)
-    if 0 < longest <= PATTERN_STEP_UNIT_MAX:
-        return step_s
-    return step_s / PATTERN_TICKS_PER_STEP
-
-
 def render_pattern(pattern, voice_for, rng=None):
     """Renders one loop of `pattern`.
 
@@ -28495,8 +28553,6 @@ def render_pattern(pattern, voice_for, rng=None):
     swing = min(max(_int_or(pattern.value("SHUFFLE"), 0), 0), 75) / 100.0 * step_s
 
     notes = pattern_step_notes(pattern)
-    gate_unit = _gate_unit(notes, step_s)
-    mt_unit = step_s / PATTERN_TICKS_PER_STEP
     granular = {k: _int_or(v, 0) for k, v in pattern.values.items()
                 if k.startswith("GRANU_")}
     gran_where = pad_for_part(pattern.granular_source)
@@ -28520,15 +28576,15 @@ def render_pattern(pattern, voice_for, rng=None):
     for n in notes:
         if n["part"] in pattern.muted_parts:
             continue
-        prob = n["prob"] / float(PATTERN_PROB_FULL)
+        # Above 10 is a trigger condition, not a probability: always plays.
+        prob = min(n["prob"], PATTERN_PROB_FULL) / float(PATTERN_PROB_FULL)
         v = voice(n["part"])
         if v is None:
             continue
         t0 = n["step"] * step_s + (swing if n["step"] % 2 else 0.0)
-        mt = min(max(n["mt"] * mt_unit, -step_s / 2), step_s / 2)
-        t0 += mt
+        t0 += min(max(n["mt"], -100), 100) / 100.0 * step_s
         count = 1 + min(max(n["sub"], 0), PATTERN_MAX_SUB_HITS - 1)
-        gate = (n["leng"] * gate_unit) if n["leng"] > 0 else step_s
+        gate = n["steps"] * step_s
         if count > 1:
             gate = min(gate, step_s / count)
         for k in range(count):
@@ -28578,7 +28634,7 @@ def render_pattern(pattern, voice_for, rng=None):
             at = 0
 
     level = _int_or(pattern.value("LEVEL"), 100)
-    buf *= 0.5 * (min(max(level, 0), 127) / 100.0 if level else 1.0)
+    buf *= 0.5 * (max(level, 0) / 100.0 if level else 1.0)
     peak = float(np.max(np.abs(buf))) if buf.size else 0.0
     if peak > 0.95:
         buf *= 0.95 / peak
@@ -30703,7 +30759,17 @@ class P6ManagerApp:
                 prm_src = self._find_prm_for(src)
                 if prm_src:
                     try:
-                        shutil.copy2(prm_src, os.path.splitext(dest)[0] + ".PRM")
+                        # PHRASE rewritten for the pad it is saved under, as
+                        # export does: a pad dragged from A1 to C5 would
+                        # otherwise carry settings addressed to A1 into a
+                        # preset laid out like the device's own BANK folders.
+                        prm_dest = os.path.splitext(dest)[0] + ".PRM"
+                        retargeted = retarget_prm_phrase(prm_src, bank, pad)
+                        if retargeted is not None:
+                            with open(prm_dest, "w", newline="") as f:
+                                f.write(retargeted)
+                        else:
+                            shutil.copy2(prm_src, prm_dest)
                     except Exception as e:
                         # Losing the settings file costs the pad its saved
                         # parameters, not its audio - keep the pad.
