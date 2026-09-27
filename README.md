@@ -101,6 +101,8 @@ stripe marks a pad that will export as mono.
 can be dragged onto any other - across banks, not just within one. Dropping
 a **bank letter** onto another row swaps two entire banks, Force Mono
 included. Everything swaps rather than overwrites, and `Ctrl+Z` undoes it.
+A plain click on a pad (no drag) plays it - click again to stop - so
+you can check what a pad holds right before moving it.
 
 ### Single-cycle import - Chain, Pairs, Multi
 
@@ -499,6 +501,10 @@ area below and switches the app to that bank.
 **Drag mode** (the button beside the path) greys the pads out and switches
 their buttons off so nothing fires by accident, then lets you drag pads onto
 pads, or bank letters onto rows. Everything swaps; nothing is overwritten.
+Clicking a pad without dragging plays it (click again to stop), so a sample
+can be recognised by ear before it is moved. In the patterns view that click
+also lights the patterns that play the pad, and selecting a pattern still
+lights its pads, with Drag mode on or off.
 
 #### All banks + patterns
 

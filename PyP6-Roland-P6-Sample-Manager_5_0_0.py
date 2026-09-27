@@ -27236,10 +27236,22 @@ class CompactSlot:
             return
         self._slim = on
         self._layout_rows()
-        add_tooltip(self.wave_canvas,
-                    "Click to select (and light the patterns that play it). "
-                    "Double-click to open the waveform editor." if on
-                    else "Click to open the waveform editor.")
+        self._update_wave_tip()
+
+    def _update_wave_tip(self):
+        tip = getattr(self.wave_canvas, "_pyp6_tooltip", None)
+        if tip is not None:
+            tip.set_text(self._wave_tip())
+        else:
+            add_tooltip(self.wave_canvas, self._wave_tip())
+
+    def _wave_tip(self):
+        if self._drag_mode:
+            return "Click to play (click again to stop). Drag to move the pad."
+        if self._slim:
+            return ("Click to select (and light the patterns that play it). "
+                    "Double-click to open the waveform editor.")
+        return "Click to open the waveform editor."
 
     def _layout_rows(self):
         """Which row sits under the waveform: the buttons, the grey drag
@@ -27368,6 +27380,7 @@ class CompactSlot:
                        self.wave_row):
             widget.config(bg=BG_INPUT if on else BG_PANEL)
         self.wave_canvas.config(cursor="fleur" if on else "hand2")
+        self._update_wave_tip()
         # Re-reads the pad so the mono stripe keeps its colour against the
         # new background instead of being painted over with it.
         self.refresh()
@@ -27413,8 +27426,14 @@ class CompactSlot:
         if not was_dragging:
             # Pressed and released without moving. In drag mode that is the
             # only click the pad gets, since the buttons are not on screen,
-            # so it does the same thing: show, don't play.
-            self._show_if_loaded()
+            # so it plays the pad: the point is to recognise a sample by ear
+            # right before moving it, without leaving the mode. Playing
+            # frames the pad and lights its patterns just as showing it
+            # does; a second click on the playing pad stops it.
+            if self._filled:
+                self._act("toggle_play_pad")
+            else:
+                self._show_if_loaded()
             return
         target = self.app.compact_cell_at_screen_pos(event.x_root, event.y_root)
         if target and target != (self.bank, self.pad):
@@ -28786,7 +28805,8 @@ class P6ManagerApp:
         add_tooltip(self.drag_btn,
                     "Pads grey out so one can be dragged onto another, across banks "
     "too. A bank letter dropped on another row swaps whole banks, Force "
-    "Mono included. Always swaps, never overwrites; Ctrl+Z undoes it.")
+    "Mono included. Always swaps, never overwrites; Ctrl+Z undoes it. "
+    "A click without dragging plays the pad.")
 
         # One Force Mono flag PER BANK, not a single global one - a single
         # shared flag can't be expressed correctly once presets can hold a
