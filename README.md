@@ -2,7 +2,7 @@
 
 ![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
 
-**Version 5.1.0** - © 2026 Brian Siemund
+**Version 5.2.1** - © 2026 Brian Siemund
 
 ## Overview
 
@@ -26,6 +26,21 @@ pad into 255 waveforms you step through with the START knob.
 If it saves you time, there is a Ko-fi link under **Settings → Donate**:
 [ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack). The app is free and
 stays free.
+
+---
+
+## What's New in 5.2
+
+### Hear a pattern before you move it
+
+In the **All banks + patterns** view, **▶ Play** (or a double-click on a
+pattern) plays it in a loop with the samples that are on the pads right now,
+and a cursor walks through its steps. Chopped pads play their slices,
+keyboard parts play pitched, held notes are held, and each pad's P-6
+settings are followed. See 5.6.
+
+Saving a **preset** now also gives each sample's P-6 settings file the
+number of the pad it is saved on, as sending a bank to the P-6 already did.
 
 ---
 
@@ -343,7 +358,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager_5_1_0.py
+python PyP6-Roland-P6-Sample-Manager_5_2_1.py
 ```
 
 ---
@@ -376,7 +391,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager_5_1_0.py
+python3 -u ./PyP6-Roland-P6-Sample-Manager_5_2_1.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -528,6 +543,28 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   that plays that pad is marked green. Double-click the waveform to open the
   editor. Clicking an empty pad selects it too, and makes its bank the
   current one.
+- **▶ Play** (or double-click a pattern) plays the selected pattern in a
+  loop, with the samples that are on the pads right now, and an orange
+  cursor walks through its steps. Picking another pattern while it plays
+  switches to that one; **■ Stop** or playing a pad stops it. It is meant
+  for recognising a pattern, not for reproducing the P-6 exactly:
+  - **Timing** follows the pattern's tempo, length, scale and shuffle, and
+    each note's length, micro timing and probability. A note held across
+    several steps (the P-6 stores it once per step) plays as one held
+    note, not as a new hit on every step.
+  - **Chopped pads** (CHOP in the pad's `.PRM`) play one slice per key:
+    C4 plays the first slice, C#4 the second and so on, as on the P-6.
+  - **Other pads** play chromatically, with C4 at the sample's own pitch,
+    plus the pattern's transpose and the pad's coarse and fine tune.
+  - **Pad settings** from the `.PRM` are used when it still goes to the
+    device with the sample: start and end, loop, gate or one-shot,
+    reverse, level, pan, the amp envelope, mono/poly and mute groups. The
+    pad's pitch and mono settings in PyP6 are applied the way export
+    applies them.
+  - **The granular part** plays as a simple grain cloud of its source pad.
+  - **Left out:** filters, effects and knob motion. Muted parts and empty
+    pads stay silent, and the status line lists any empty pads the pattern
+    uses.
 - **Drag a pattern** onto another slot to swap the two; dropping on an empty
   slot moves it. No Drag mode is needed for patterns.
 - **Clear** empties the selected pattern the way the P-6's own clear does:
@@ -856,7 +893,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_1_0.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_2_1.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
