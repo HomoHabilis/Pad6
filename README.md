@@ -2,7 +2,7 @@
 
 ![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
 
-**Version 5.0.0** - © 2026 Brian Siemund
+**Version 5.1.0** - © 2026 Brian Siemund
 
 ## Overview
 
@@ -101,6 +101,8 @@ stripe marks a pad that will export as mono.
 can be dragged onto any other - across banks, not just within one. Dropping
 a **bank letter** onto another row swaps two entire banks, Force Mono
 included. Everything swaps rather than overwrites, and `Ctrl+Z` undoes it.
+A plain click on a pad (no drag) plays it - click again to stop - so
+you can check what a pad holds right before moving it.
 
 ### Single-cycle import - Chain, Pairs, Multi
 
@@ -341,7 +343,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager_5_0_0.py
+python PyP6-Roland-P6-Sample-Manager_5_1_0.py
 ```
 
 ---
@@ -374,7 +376,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager_5_0_0.py
+python3 -u ./PyP6-Roland-P6-Sample-Manager_5_1_0.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -499,6 +501,10 @@ area below and switches the app to that bank.
 **Drag mode** (the button beside the path) greys the pads out and switches
 their buttons off so nothing fires by accident, then lets you drag pads onto
 pads, or bank letters onto rows. Everything swaps; nothing is overwritten.
+Clicking a pad without dragging plays it (click again to stop), so a sample
+can be recognised by ear before it is moved. In the patterns view that click
+also lights the patterns that play the pad, and selecting a pattern still
+lights its pads, with Drag mode on or off.
 
 #### All banks + patterns
 
@@ -850,7 +856,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_0_0.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_1_0.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
