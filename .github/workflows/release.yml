@@ -101,8 +101,10 @@ jobs:
             fi
           fi
           # The script in git carries APP_VERSION = None; the copy that is
-          # frozen gets the real version.
-          sed -i "s/^APP_VERSION = .*/APP_VERSION = \"$version\"/" "$script"
+          # frozen gets the real version. -i.bak: macOS's BSD sed needs the
+          # backup suffix attached, GNU sed accepts it too.
+          sed -i.bak "s/^APP_VERSION = .*/APP_VERSION = \"$version\"/" "$script"
+          rm "$script.bak"
           if ! grep -qx "APP_VERSION = \"$version\"" "$script"; then
             echo "::error::Could not stamp APP_VERSION into $script"
             exit 1
