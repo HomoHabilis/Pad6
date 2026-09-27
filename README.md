@@ -2,7 +2,8 @@
 
 ![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
 
-**Version 5.2.1** - © 2026 Brian Siemund
+[![Latest release](https://img.shields.io/github/v/release/HomoHabilis/Roland-P6-files-manager)](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
+© 2026 Brian Siemund
 
 ## Overview
 
@@ -214,7 +215,7 @@ travel in packs too, and everything travels inside presets as well.
 
 ### 1.1 Tested configuration
 
-4.2.3 was developed and tested against:
+Developed and tested against:
 
 ```
 Python:      3.14.4 on linux
@@ -358,7 +359,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager_5_2_1.py
+python PyP6-Roland-P6-Sample-Manager.py
 ```
 
 ---
@@ -391,7 +392,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager_5_2_1.py
+python3 -u ./PyP6-Roland-P6-Sample-Manager.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -854,31 +855,42 @@ the Length unit stays available.
 ### 7.1 How releases are made
 
 Releases are built by the GitHub Actions workflow in
-`.github/workflows/release.yml` - free for a public repository. To publish
-one:
+`.github/workflows/release.yml` - free for a public repository.
 
-1. Set `APP_VERSION` in the script to the new version, e.g. `4.2.4`, and
-   commit it.
-2. Tag that commit and push the tag:
+**The git tag is the version.** No file in the repository holds the release
+number, so a release needs no "bump" commit: the script says
+`APP_VERSION = None`, and the build writes the tag into the copy it freezes
+(`v4.2.4` → `4.2.4` in the title bar and in Settings → About). Run from a git
+checkout, the script asks `git describe` instead and shows e.g.
+`4.2.4-3-gabc1234` - three commits after v4.2.4.
 
-   ```
-   git tag v4.2.4
-   git push origin v4.2.4
-   ```
+To publish a release, write what changed into a file (Markdown is fine) and
+tag with it as the tag's message:
+
+```
+git tag -a v4.2.4 --cleanup=whitespace -F notes.md
+git push origin v4.2.4
+```
+
+The tag message becomes the release description. `--cleanup=whitespace`
+keeps Markdown headings: by default git drops every line starting with `#`
+as a comment. The notes file itself is not committed. There is no need for a
+Downloads section either - the workflow appends the table of the four
+downloads, named after the tag, to every release.
 
 Or, without git: on the repository's **Actions** tab choose **Build &
 Release → Run workflow**, pick the branch (normally `main`) and type the
 tag, e.g. `v4.2.4`. The tag is then created on the commit that was built.
+Such a tag has no message, so the description comes from
+`.github/release-notes/<tag>.md` if that file exists, and otherwise GitHub
+lists the pull requests merged since the last release. Either can be edited
+on the release page afterwards.
 
 Either way, the workflow builds Windows x64, macOS arm64, macOS x64 and Linux x64 in
 parallel, bundles ffmpeg/ffprobe into each, checks that every build
-starts, and creates the release with all four downloads attached and
-release notes generated from the commits. A tag that does not match
-`APP_VERSION` stops the build before anything is published.
-
-The release description comes from `.github/release-notes/<tag>.md`
-(e.g. `.github/release-notes/v4.2.4.md`) when that file exists; without
-one, GitHub lists the pull requests merged since the last release.
+starts, and creates the release with all four downloads attached. A tag
+that is not of the form `v4.2.4` or `v4.2.4-rc1` stops the build before
+anything is published.
 
 A tag with a suffix - `v4.2.4-rc1`, `v4.2.4-test1` - builds the same way
 but is published as a **pre-release**: handy for trying a build out, and
@@ -893,7 +905,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_2_1.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Sample-Manager.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
@@ -903,6 +915,9 @@ python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_2_1.py -y -w --onefile ^
 
 Notes:
 
+- A build made this way shows the version as `dev`. To give it a number,
+  first change the line `APP_VERSION = None` in the script to e.g.
+  `APP_VERSION = "4.2.4"` (do not commit that).
 - The logo is built into the script. Drop a `pyp6logo.png` next to it to use
   your own instead.
 - Use `;` as the `--add-binary` separator on Windows, not `:`.
