@@ -502,15 +502,17 @@ def warn_pydub_missing_once():
 
 APP_NAME = "PyP6"
 APP_SUBTITLE = "Roland AIRA P-6 Sample Manager"
-APP_VERSION = "5.2.1"
+# The git tag is the only place a release number is written down. The
+# release build replaces this line with the tag it was built from (v5.2.1
+# -> "5.2.1"), so the source never needs a commit to bump it.
+APP_VERSION = None
 APP_AUTHOR = "Brian Siemund"
 APP_YEAR = "2026"
 APP_URL = "https://github.com/j0kerpack/Roland-P6-sample-manager"
 # Shown in About and carried by "Copy Info", so a bug report pasted from
 # there has it too.
 APP_SUPPORT_URL = "https://ko-fi.com/j0kerpack"
-# Single source of truth for the version: the window title and the About
-# box both read these, so a release bump can't leave one of them stale.
+# The window title and the About box both read these, so they always agree.
 
 PYP6_DEBUG = bool(os.environ.get("PYP6_DEBUG"))
 
@@ -529,6 +531,34 @@ def _swallowed(exc, where):
     """
     if PYP6_DEBUG:
         print(f"[swallowed] {where}: {type(exc).__name__}: {exc}")
+
+
+def _version_from_git():
+    """Version of a copy run straight from a git checkout.
+
+    Asks git for the nearest release tag: "5.2.1" on the tagged commit,
+    "5.2.1-3-gabc1234" three commits after it, with "-dirty" appended when
+    there are uncommitted changes. "dev" when that can't be found out - no
+    git, a download of the source without history, or a build made by hand
+    rather than by the release workflow."""
+    if getattr(sys, "frozen", False):
+        return "dev"
+    try:
+        out = subprocess.run(
+            ["git", "describe", "--tags", "--match", "v[0-9]*", "--dirty"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            capture_output=True, text=True, timeout=3)
+    except (OSError, subprocess.SubprocessError) as _e:
+        _swallowed(_e, "_version_from_git")
+        return "dev"
+    described = out.stdout.strip()
+    if out.returncode != 0 or not described.startswith("v"):
+        return "dev"
+    return described[1:]
+
+
+if APP_VERSION is None:
+    APP_VERSION = _version_from_git()
 
 
 APP_DIR = os.path.expanduser("~/.pyp6")

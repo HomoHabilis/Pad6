@@ -64,12 +64,17 @@ Line numbers below are approximate, as of v5.0.0.
 
 ## Constraints to remember
 
-- **Version check:** `APP_VERSION` must match the release tag. `v5.0.1` is a
-  release; `v5.0.1-rc1` is published as a pre-release.
-- **Script name:** it is renamed each version (`_5_0_0.py`). The workflow
-  finds it with a glob; update the README when you rename it.
-- **Release notes:** put them in `.github/release-notes/<tag>.md`; without
-  that file, GitHub generates notes automatically.
+- **Version:** the git tag is the only source. The script holds
+  `APP_VERSION = None`; the release workflow stamps the tag into the frozen
+  copy, and a source run falls back to `git describe`. No bump commit before
+  a release. `v5.0.1` is a release; `v5.0.1-rc1` is published as a
+  pre-release. (Up to 5.2.1 the version was hard-coded and the script
+  renamed each release, e.g. `_5_0_0.py`.)
+- **Script name:** `PyP6-Roland-P6-Sample-Manager.py`, no longer renamed.
+- **Release notes:** the message of an annotated tag
+  (`git tag -a vX --cleanup=whitespace -F notes.md`). For a release started
+  with Run workflow, `.github/release-notes/<tag>.md` if it exists, else
+  GitHub's generated notes. The workflow appends the Downloads table itself.
 - **Tags from Claude Code sessions:** a session can't push tags. Releases are
   started via **Actions → Build & Release → Run workflow** (tag input), on
   `main` or any branch.
@@ -86,7 +91,7 @@ Line numbers below are approximate, as of v5.0.0.
 
 | File | What's there |
 |---|---|
-| `PyP6-Roland-P6-Sample-Manager_5_0_0.py` (32k lines) | Pattern model at ~L27840–28160: `P6Pattern`, `part_for_pad`, `find_pattern_files`, `_BLANK_PATTERN_XZ` |
+| `PyP6-Roland-P6-Sample-Manager.py` (32k lines) | Pattern model at ~L27840–28160: `P6Pattern`, `part_for_pad`, `find_pattern_files`, `_BLANK_PATTERN_XZ` |
 | same | UI classes: `PatternStrip` (~28186), `PatternInfoCard` (~28369), `PatternDeviceDialog` (~28514), `CompactSlot.set_slim` (~27234) |
 | same | App methods: `set_view_mode`, `_build_pattern_panel`, `_sync_patterns_with_pad_moves`, `swap_patterns`, `clear_selected_pattern`, `save/load_patterns_*`, `select_overview_pad` (~L30800–31700) |
 | same | Undo: `_snapshot_state` / `_restore_snapshot` (~29946) |
@@ -94,7 +99,7 @@ Line numbers below are approximate, as of v5.0.0.
 | same | Presets: `PRESET_FORMAT_VERSION` (~3491), `verify_preset_folder`, `Preset*Dialog`, `save/load_preset_to/from_folder` |
 | same | Drive detection: `_mount_globs`, `_import_dirs_under`, `guess_p6_pattern_dir` (~776–900) |
 | `.github/workflows/release.yml` | Build, ffmpeg check inside the frozen bundle, smoke test, publish |
-| `.github/release-notes/v5.0.0.md` | Template for future release notes |
+| `.github/release-notes/v5.0.0.md` | Example release notes (the Downloads table is now added by the workflow) |
 | `README.md` | §5.6 patterns, §5.10 presets, §7 releases |
 
 ## Test approach used
