@@ -528,6 +528,26 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   that plays that pad is marked green. Double-click the waveform to open the
   editor. Clicking an empty pad selects it too, and makes its bank the
   current one.
+- **▶ Play** (or double-click a pattern) plays the selected pattern in a
+  loop, with the samples that are on the pads right now, and an orange
+  cursor walks through its steps. Picking another pattern while it plays
+  switches to that one; **■ Stop** or playing a pad stops it. It is meant
+  for recognising a pattern, not for reproducing the P-6 exactly:
+  - **Timing** follows the pattern's tempo, length, scale and shuffle, and
+    each note's sub steps, probability and micro timing.
+  - **Chopped pads** (CHOP in the pad's `.PRM`) play one slice per key:
+    C4 plays the first slice, C#4 the second and so on, as on the P-6.
+  - **Other pads** play chromatically, with C4 at the sample's own pitch,
+    plus the pattern's transpose and the pad's coarse and fine tune.
+  - **Pad settings** from the `.PRM` are used when it still goes to the
+    device with the sample: start and end, loop, gate or one-shot,
+    reverse, level, pan, the amp envelope, mono/poly and mute groups. The
+    pad's pitch and mono settings in PyP6 are applied the way export
+    applies them.
+  - **The granular part** plays as a simple grain cloud of its source pad.
+  - **Left out:** filters, effects and knob motion. Muted parts and empty
+    pads stay silent, and the status line lists any empty pads the pattern
+    uses.
 - **Drag a pattern** onto another slot to swap the two; dropping on an empty
   slot moves it. No Drag mode is needed for patterns.
 - **Clear** empties the selected pattern the way the P-6's own clear does:

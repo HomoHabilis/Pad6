@@ -28182,6 +28182,446 @@ def remap_patterns(patterns, mapping):
     return out, changed
 
 
+# ---------------------------------------------------------------------------
+# Pattern preview: hearing a pattern without the P-6
+#
+# Renders one pass of a pattern into a stereo buffer that is then looped,
+# so the timing is exact (no Tk timer ever decides when a note plays) and
+# a note ringing past the end of the loop comes back in at the start, the
+# way it does on the device.
+#
+# The aim is to recognise the piece, not to be a P-6: no filter, no FX, no
+# motion, and the granular part is a plain grain cloud. What it does follow
+# is what decides WHICH audio plays WHEN:
+#
+#   - each step's notes (PART, NOTE, VELO, LENG, SUB, PROB, MT), the
+#     pattern's TEMPO, SCALE, SHUFFLE, TRANSPOSE and PART_MUTE;
+#   - each pad's .PRM, when the device would still get it: START_POS/SIZE,
+#     LOOP, GATE, REVERSE, CHOP, C.TUNE/F.TUNE, LEVEL, PAN, the amp
+#     envelope, MONO_POLY and MUTE_GROUP;
+#   - the pad's own PyP6 settings: pitch (vari-speed, as exported) and
+#     force mono.
+#
+# CHOP > 1 splits the sample into that many equal slices, played from C4
+# (note 60) upwards, one slice per key: the P-6's chop maps up to 64 slices
+# onto C4..D#9. Without a chop a note plays the sample chromatically, C4
+# being its own pitch.
+#
+# Some of the step fields are not documented anywhere and no device file
+# with them set has been available, so their units below are best guesses,
+# each in one constant: scale order, LENG and MT in ticks, SUB as extra
+# hits, PROB in tenths.
+# ---------------------------------------------------------------------------
+
+PREVIEW_SR = 44100
+PREVIEW_ROOT_NOTE = 60              # C4: a note that plays the sample as it is
+PREVIEW_MAX_CHOP = 64
+# SCALE -> length of one step in quarter notes. Index 1 (1/16) is what the
+# device's own cleared pattern holds.
+PATTERN_SCALE_BEATS = (0.5, 0.25, 0.125, 1.0 / 3, 1.0 / 6, 1.0 / 12)
+# LENG and MT count sequencer ticks. A pattern whose longest note is at most
+# this many units has its LENG read as counting steps instead (_gate_unit).
+PATTERN_TICKS_PER_STEP = 24
+PATTERN_STEP_UNIT_MAX = 16
+PATTERN_PROB_FULL = 10              # PROBn=10 is the default: always plays
+PATTERN_MAX_SUB_HITS = 8
+PREVIEW_MAX_VOICE_SECONDS = 20.0
+_STEP_FIELD_RE = re.compile(r"\b([A-Z]+)(\d+)=(-?\d+)")
+
+
+def pattern_step_notes(pattern):
+    """Every note in `pattern`, as dicts, in step order.
+
+    Sample notes carry "part"; granular notes carry part=GRANULAR_PART.
+    Steps past the pattern's length are left out - the device does not play
+    them either.
+    """
+    notes = []
+    for line in pattern.text.splitlines():
+        m = _PATTERN_LINE_RE.match(line)
+        if not m:
+            continue
+        key = m.group(1).strip()
+        if key.startswith("STEP_NOTE_SMPL "):
+            granular = False
+        elif key.startswith("STEP_NOTE_GRNL "):
+            granular = True
+        else:
+            continue
+        step = _int_or(key.split()[-1], 0)
+        if not 1 <= step <= pattern.length:
+            continue
+        by_index = {}
+        for name, idx, val in _STEP_FIELD_RE.findall(m.group(3)):
+            by_index.setdefault(int(idx), {})[name] = int(val)
+        for idx in sorted(by_index):
+            f = by_index[idx]
+            if granular:
+                if f.get("NOTE", -1) < 0:
+                    continue
+                part = GRANULAR_PART
+            else:
+                part = f.get("PART", -1)
+                if part < 0:
+                    continue
+            notes.append({
+                "step": step - 1, "part": part, "note": f.get("NOTE", -1),
+                "velo": f.get("VELO", 0), "leng": f.get("LENG", 0),
+                "sub": f.get("SUB", 0), "prob": f.get("PROB", PATTERN_PROB_FULL),
+                "mt": f.get("MT", 0),
+            })
+    return notes
+
+
+def read_prm_values(path):
+    """{KEY: int} from a pad or pattern .PRM; {} if it cannot be read."""
+    try:
+        with open(path, "r", encoding="ascii", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return {}
+    return {k.strip(): int(v) for k, v in
+            re.findall(r"^([^\t=\r\n]+?)\s*=\s*(-?\d+)\s*$", text, re.M)}
+
+
+def _env_seconds(value):
+    """P-6 envelope time (0-255) to seconds. A curve, not a measurement:
+    small values stay snappy, 255 is a slow pad swell."""
+    v = min(max(int(value), 0), 255) / 255.0
+    return 8.0 * v ** 3
+
+
+def _pan_gains(pan):
+    p = min(max(int(pan), 0), 127) / 127.0
+    return math.cos(p * math.pi / 2), math.sin(p * math.pi / 2)
+
+
+class PadVoice:
+    """One pad as the pattern preview plays it: audio plus voice settings."""
+
+    def __init__(self, audio, fs, prm=None):
+        if audio.ndim == 1:
+            audio = np.stack([audio, audio], axis=1)
+        elif audio.shape[1] == 1:
+            audio = np.repeat(audio, 2, axis=1)
+        else:
+            audio = audio[:, :2]
+        self.audio = np.ascontiguousarray(audio, dtype=np.float32)
+        self.fs = fs
+        self.prm = prm or {}
+        self.has_prm = bool(prm)
+        p = self.prm
+        n = len(self.audio)
+        # Without a .PRM the device plays the whole sample once per note.
+        start = min(max(p.get("START_POS", 0), 0), max(n - 1, 0))
+        size = p.get("SIZE", 0)
+        if size <= 0 or start + size > n:
+            size = n - start
+        self.start, self.size = start, max(size, 1)
+        loop_size = p.get("LOOP_SIZE", 0)
+        self.loop_len = min(loop_size, self.size) if loop_size > 0 else self.size
+        self.loop = bool(p.get("LOOP", 0)) if prm else False
+        self.gate = bool(p.get("GATE", 0)) if prm else False
+        self.reverse = p.get("REVERSE", 0)
+        chop = p.get("CHOP", 1)
+        self.chop = chop if 1 < chop <= PREVIEW_MAX_CHOP else 1
+        self.tune = p.get("C.TUNE", 0) + p.get("F.TUNE", 0) / 100.0
+        self.level = p.get("LEVEL", 100) / 100.0
+        self.pan = _pan_gains(p.get("PAN", 64))
+        self.attack = _env_seconds(p.get("TENV_ATTACK", 0))
+        self.decay = _env_seconds(p.get("TENV_DECAY", 0))
+        self.sustain = min(max(p.get("TENV_SUSTAIN", 255), 0), 255) / 255.0
+        self.release = _env_seconds(p.get("TENV_RELEASE", 0))
+        self.poly = bool(p.get("MONO_POLY", 0))
+        self.mute_group = p.get("MUTE_GROUP", 0)
+
+    def region_for(self, note, transpose=0):
+        """(start, size, loop_len, speed) for `note`, or None when the note
+        lands on no slice of a chopped sample. Speed is source frames per
+        output frame."""
+        rel = (note if note >= 0 else PREVIEW_ROOT_NOTE) - PREVIEW_ROOT_NOTE
+        base = self.fs / PREVIEW_SR
+        if self.chop > 1:
+            if not 0 <= rel < self.chop:
+                return None
+            n = len(self.audio)
+            s0 = int(round(rel * n / self.chop))
+            s1 = int(round((rel + 1) * n / self.chop))
+            return s0, max(s1 - s0, 1), max(s1 - s0, 1), base * 2.0 ** (self.tune / 12.0)
+        semis = rel + transpose + self.tune
+        return self.start, self.size, self.loop_len, base * 2.0 ** (semis / 12.0)
+
+    def render(self, note, velocity, gate_s, cut_s, transpose=0):
+        """One note as a (frames, 2) array, or None. `gate_s` is how long the
+        key is held, `cut_s` when a mono/mute-group retrigger silences it."""
+        region = self.region_for(note, transpose)
+        if region is None:
+            return None
+        start, size, loop_len, speed = region
+        if speed <= 0:
+            return None
+        sr = PREVIEW_SR
+        natural = size / speed
+        release = self.release if (self.gate or self.loop) else 0.0
+        if self.loop and self.chop <= 1:
+            length = gate_s + release
+        elif self.gate:
+            length = min(natural, gate_s + release)
+        else:
+            length = natural
+        length = min(length, cut_s, PREVIEW_MAX_VOICE_SECONDS)
+        frames = int(length * sr)
+        if frames < 2:
+            return None
+        pos = np.arange(frames, dtype=np.float64) * speed
+        if self.loop and self.chop <= 1 and natural < length:
+            head = size - loop_len
+            over = pos >= size
+            rel = pos[over] - size
+            if self.reverse == 2:           # alternate: back and forth
+                period = 2 * loop_len
+                rel = np.mod(rel, period)
+                rel = np.where(rel < loop_len, loop_len - 1 - rel, rel - loop_len)
+            else:
+                rel = np.mod(rel, loop_len)
+            pos[over] = head + rel
+        pos = np.minimum(pos, size - 1)
+        if self.reverse == 1:
+            pos = (size - 1) - pos
+        pos += start
+        i0 = pos.astype(np.int64)
+        i1 = np.minimum(i0 + 1, len(self.audio) - 1)
+        frac = (pos - i0).astype(np.float32)[:, None]
+        out = self.audio[i0] * (1.0 - frac) + self.audio[i1] * frac
+
+        env = self._envelope(frames, gate_s, release)
+        vel = 0.35 + 0.65 * (min(max(velocity, 1), 127) / 127.0) if velocity > 0 else 0.85
+        gain = env * (self.level * vel)
+        out[:, 0] *= gain * self.pan[0] * math.sqrt(2)
+        out[:, 1] *= gain * self.pan[1] * math.sqrt(2)
+        return out
+
+    def _envelope(self, frames, gate_s, release):
+        sr = PREVIEW_SR
+        t = np.arange(frames, dtype=np.float32) / sr
+        env = np.ones(frames, dtype=np.float32)
+        if self.attack > 0.002:
+            env = np.minimum(env, t / self.attack)
+        if self.gate or self.loop:
+            if self.decay > 0.002 and self.sustain < 1.0:
+                d = np.clip((t - self.attack) / self.decay, 0.0, 1.0)
+                env *= 1.0 - (1.0 - self.sustain) * d
+            elif self.sustain < 1.0:
+                env *= np.where(t > self.attack, self.sustain, 1.0).astype(np.float32)
+            if release > 0.002:
+                env *= np.clip(1.0 - (t - gate_s) / release, 0.0, 1.0)
+            else:
+                env *= (t < gate_s)
+        # A few milliseconds of fade at both ends: a slice or a cut note
+        # starting or stopping mid-waveform would click.
+        edge = min(int(0.002 * sr), frames // 2)
+        if edge > 0:
+            ramp = np.linspace(0.0, 1.0, edge, dtype=np.float32)
+            env[:edge] *= ramp
+            env[-edge:] *= ramp[::-1]
+        return env
+
+    def render_grains(self, note, velocity, gate_s, cut_s, g):
+        """A granular note: short windowed grains read around GRANU_HEAD_POS
+        and pitched by the note. Enough to hear the granular part's pitch
+        and texture in the mix, nothing like the device's engine."""
+        sr = PREVIEW_SR
+        release = _env_seconds(g.get("GRANU_TENV_RELEASE", 0))
+        attack = _env_seconds(g.get("GRANU_TENV_ATTACK", 0))
+        length = min(gate_s + release, cut_s, PREVIEW_MAX_VOICE_SECONDS)
+        frames = int(length * sr)
+        n = len(self.audio)
+        if frames < 2 or n < 16:
+            return None
+        rel = (note if note >= 0 else PREVIEW_ROOT_NOTE) - PREVIEW_ROOT_NOTE
+        semis = rel + g.get("GRANU_COARSE_TUNE", 0) + g.get("GRANU_FINE_TUNE", 0) / 100.0
+        speed = self.fs / sr * 2.0 ** (semis / 12.0)
+        grain = int(0.08 * sr)
+        hop = grain // 4
+        window = np.hanning(grain).astype(np.float32)[:, None]
+        head = g.get("GRANU_HEAD_POS", 0) % n
+        spread = int(n * min(max(g.get("GRANU_SPREAD", 0), 0), 255) / 255.0 * 0.1)
+        rng = random.Random(note * 7919 + frames)
+        out = np.zeros((frames + grain, 2), dtype=np.float32)
+        idx = np.arange(grain, dtype=np.float64) * speed
+        for at in range(0, frames, hop):
+            src = head + (rng.randint(-spread, spread) if spread else 0)
+            pos = np.mod(src + idx, n).astype(np.int64)
+            out[at:at + grain] += self.audio[pos] * window
+        out = out[:frames] * (0.5 * min(max(g.get("GRANU_LEVEL", 100), 0), 127) / 100.0)
+        t = np.arange(frames, dtype=np.float32) / sr
+        env = np.ones(frames, dtype=np.float32)
+        if attack > 0.002:
+            env = np.minimum(env, t / attack)
+        if release > 0.002:
+            env *= np.clip(1.0 - (t - gate_s) / release, 0.0, 1.0)
+        else:
+            env *= (t < gate_s)
+        vel = 0.35 + 0.65 * (min(max(velocity, 1), 127) / 127.0) if velocity > 0 else 0.85
+        return out * (env * vel)[:, None]
+
+
+def _gate_unit(notes, step_s):
+    """Seconds per LENG unit (see PATTERN_TICKS_PER_STEP)."""
+    longest = max((n["leng"] for n in notes), default=0)
+    if 0 < longest <= PATTERN_STEP_UNIT_MAX:
+        return step_s
+    return step_s / PATTERN_TICKS_PER_STEP
+
+
+def render_pattern(pattern, voice_for, rng=None):
+    """Renders one loop of `pattern`.
+
+    `voice_for(bank, pad)` returns the PadVoice for a pad, or None when the
+    pad is empty. Returns (buffer (frames, 2) float32, step_seconds,
+    info dict with "missing" pads, "notes" played and "chopped" pads).
+    """
+    rng = rng or random.Random()
+    tempo = pattern.tempo if pattern.tempo > 0 else 120.0
+    scale = _int_or(pattern.value("SCALE"), 1)
+    beats = PATTERN_SCALE_BEATS[scale] if 0 <= scale < len(PATTERN_SCALE_BEATS) else 0.25
+    step_s = 60.0 / tempo * beats
+    steps = max(1, pattern.length)
+    loop_s = steps * step_s
+    total = max(1, int(round(loop_s * PREVIEW_SR)))
+    transpose = _int_or(pattern.value("TRANSPOSE"), 0)
+    # Shuffle delays every second step. The value is taken as a percentage
+    # of a step, capped where a swung step would reach the next one.
+    swing = min(max(_int_or(pattern.value("SHUFFLE"), 0), 0), 75) / 100.0 * step_s
+
+    notes = pattern_step_notes(pattern)
+    gate_unit = _gate_unit(notes, step_s)
+    mt_unit = step_s / PATTERN_TICKS_PER_STEP
+    granular = {k: _int_or(v, 0) for k, v in pattern.values.items()
+                if k.startswith("GRANU_")}
+    gran_where = pad_for_part(pattern.granular_source)
+
+    voices, missing, chopped = {}, set(), set()
+
+    def voice(part):
+        where = gran_where if part == GRANULAR_PART else pad_for_part(part)
+        if where is None:
+            return None
+        if where not in voices:
+            voices[where] = voice_for(*where)
+            if voices[where] is None:
+                missing.add(where)
+            elif voices[where].chop > 1 and part != GRANULAR_PART:
+                chopped.add(where)
+        return voices[where]
+
+    # Every hit with its time, then the retrigger cuts, then the audio.
+    hits = []
+    for n in notes:
+        if n["part"] in pattern.muted_parts:
+            continue
+        prob = n["prob"] / float(PATTERN_PROB_FULL)
+        v = voice(n["part"])
+        if v is None:
+            continue
+        t0 = n["step"] * step_s + (swing if n["step"] % 2 else 0.0)
+        mt = min(max(n["mt"] * mt_unit, -step_s / 2), step_s / 2)
+        t0 += mt
+        count = 1 + min(max(n["sub"], 0), PATTERN_MAX_SUB_HITS - 1)
+        gate = (n["leng"] * gate_unit) if n["leng"] > 0 else step_s
+        if count > 1:
+            gate = min(gate, step_s / count)
+        for k in range(count):
+            if prob < 1.0 and rng.random() >= prob:
+                continue
+            t = (t0 + k * step_s / count) % loop_s
+            if n["part"] == GRANULAR_PART:
+                key = ("granular",)
+            elif v.mute_group:
+                key = ("group", v.mute_group)
+            elif not v.poly:
+                key = ("part", n["part"])
+            else:
+                key = None
+            hits.append({"t": t, "note": n, "voice": v, "gate": gate, "key": key})
+
+    hits.sort(key=lambda h: h["t"])
+    by_key = {}
+    for h in hits:
+        if h["key"] is not None:
+            by_key.setdefault(h["key"], []).append(h)
+    for group in by_key.values():
+        for i, h in enumerate(group):
+            nxt = group[(i + 1) % len(group)]["t"]
+            if i + 1 == len(group):
+                nxt += loop_s
+            h["cut"] = max(nxt - h["t"], 0.005) if len(group) > 1 else loop_s
+    buf = np.zeros((total, 2), dtype=np.float32)
+    played = 0
+    for h in hits:
+        n, v = h["note"], h["voice"]
+        cut = h.get("cut", PREVIEW_MAX_VOICE_SECONDS)
+        if n["part"] == GRANULAR_PART:
+            audio = v.render_grains(n["note"], n["velo"], h["gate"], cut, granular)
+        else:
+            audio = v.render(n["note"], n["velo"], h["gate"], cut, transpose)
+        if audio is None:
+            continue
+        played += 1
+        at = int(round(h["t"] * PREVIEW_SR)) % total
+        # Folded into the loop: a tail past the end rings on at the start.
+        pos = 0
+        while pos < len(audio):
+            room = min(total - at, len(audio) - pos)
+            buf[at:at + room] += audio[pos:pos + room]
+            pos += room
+            at = 0
+
+    level = _int_or(pattern.value("LEVEL"), 100)
+    buf *= 0.5 * (min(max(level, 0), 127) / 100.0 if level else 1.0)
+    peak = float(np.max(np.abs(buf))) if buf.size else 0.0
+    if peak > 0.95:
+        buf *= 0.95 / peak
+    return buf, step_s, {"missing": missing, "notes": played, "chopped": chopped}
+
+
+def load_pad_voice(state, force_mono=False):
+    """PadVoice for a pad state dict (as _get_pad_state returns it), or None.
+
+    Plays what export would put on the device: the pad's pitch as
+    vari-speed, force mono, and the .PRM only while prm_survives_settings()
+    says it still goes along - otherwise the device falls back to its
+    defaults, and so does this."""
+    path = (state or {}).get("filepath")
+    if not path or not os.path.exists(path):
+        return None
+    try:
+        data, fs = sf.read(path, dtype="float32", always_2d=True)
+    except Exception:
+        if not PYDUB_AVAILABLE:
+            return None
+        try:
+            seg = AudioSegment.from_file(path)
+            data = np.array(seg.get_array_of_samples()).astype(np.float32)
+            data /= float(1 << (8 * seg.sample_width - 1))
+            data = data.reshape((-1, seg.channels))
+            fs = seg.frame_rate
+        except Exception:
+            return None
+    if len(data) == 0:
+        return None
+    if force_mono or state.get("mono"):
+        data = data.mean(axis=1, keepdims=True)
+    cents = state.get("pitch_cents", 0) or 0
+    prm = None
+    prm_path = find_prm_for(path)
+    if prm_path and prm_survives_settings(path, state.get("target_rate"), cents):
+        prm = read_prm_values(prm_path) or None
+    if cents and not state.get("wavetable"):
+        fs = fs * pitch_speed_factor(cents)
+    return PadVoice(data, fs, prm)
+
+
 class _PatternHoverTooltip(_ZoneHoverTooltip):
     """_ZoneHoverTooltip for a 2-D grid: regions are rectangles and carry
     their finished text."""
@@ -28228,6 +28668,7 @@ class PatternStrip:
         self.canvas.bind("<ButtonPress-1>", self._press)
         self.canvas.bind("<B1-Motion>", self._motion)
         self.canvas.bind("<ButtonRelease-1>", self._release)
+        self.canvas.bind("<Double-Button-1>", self._double)
         self._tip = _PatternHoverTooltip(self.canvas)
         self._rects = {}
         self._press_at = None
@@ -28237,6 +28678,11 @@ class PatternStrip:
 
     def pack(self, **kw):
         self.canvas.pack(**kw)
+
+    def _double(self, event):
+        slot = self.slot_at(event.x, event.y)
+        if slot is not None and self.app.patterns.get(slot) is not None:
+            self.app.play_pattern_preview(slot)
 
     def slot_at(self, x, y):
         for slot, (x0, y0, x1, y1) in self._rects.items():
@@ -28468,10 +28914,13 @@ class PatternInfoCard:
         cell_gap = sc(2)
         cell_w = (w - 2 * pad - cell_gap * (per_row - 1)) / per_row
         cell_h = max(sc(4), min(sc(9), (sc(24) - (rows - 1) * cell_gap) / rows))
+        self._step_cells = []
+        self._cells_slot = slot
         for i in range(steps):
             r, col = divmod(i, per_row)
             cx = pad + col * (cell_w + cell_gap)
             cy = y + r * (cell_h + cell_gap)
+            self._step_cells.append((cx, cy, cx + cell_w, cy + cell_h))
             if pat.step_parts[i]:
                 fill = ACCENT_BLUE
             elif pat.step_granular[i]:
@@ -28480,6 +28929,9 @@ class PatternInfoCard:
                 fill = BG_INPUT
             c.create_rectangle(cx, cy, cx + cell_w, cy + cell_h, fill=fill, outline="")
         y += rows * (cell_h + cell_gap) + sc(4)
+        playing = self.app.pattern_preview_step()
+        if playing is not None and playing[0] == slot:
+            self.show_step(slot, playing[1])
 
         # The samples it plays, as chips, most-used first - and a mark on a
         # part the pattern mutes.
@@ -28505,6 +28957,19 @@ class PatternInfoCard:
             src = pad_name_for_part(pat.granular_source)
             self._chip(c, x, y, f"Gran {src} \u00d7{pat.granular_count}",
                        BG_INPUT, ACCENT_PURPLE, w - pad)
+
+    def show_step(self, slot, step):
+        """Moves the preview's playhead to `step` (None takes it away).
+        Only an outline on top of the cells, so it costs nothing to move."""
+        c = self.canvas
+        c.delete("playhead")
+        cells = getattr(self, "_step_cells", [])
+        if step is None or slot != getattr(self, "_cells_slot", None) \
+                or not 0 <= step < len(cells):
+            return
+        x0, y0, x1, y1 = cells[step]
+        c.create_rectangle(x0 - 1, y0 - 1, x1 + 1, y1 + 1, outline=ACCENT_ORANGE,
+                           width=2, tags="playhead")
 
     @staticmethod
     def _chip(c, x, y, text, bg, fg, right):
@@ -28757,6 +29222,8 @@ class P6ManagerApp:
         # that play the selected pad. Whichever was clicked last.
         self._pattern_focus = "pattern"
         self.pattern_panel = None
+        # The pattern being previewed: slot, stream, timing, playhead timer.
+        self._pattern_preview = None
         self.pattern_sync_var = tk.BooleanVar(
             value=bool(load_config().get("pattern_sync", False)))
 
@@ -31400,6 +31867,20 @@ class P6ManagerApp:
             bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=64, height=24, radius=7,
             font=ui_font(8, "bold"), state="disabled")
         self.pattern_clear_btn.pack(side="left", padx=(4, 0))
+        self.pattern_play_btn = RoundedButton(
+            head, text="\u25b6 Play", command=self.toggle_pattern_preview,
+            bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=64, height=24, radius=7,
+            font=ui_font(8, "bold"), state="disabled")
+        self.pattern_play_btn.pack(side="left", padx=(4, 0))
+        add_tooltip(self.pattern_play_btn,
+                    "Listen to the selected pattern, looped, with the samples now on "
+                    "the pads (double-click a pattern does the same). Chopped pads "
+                    "play their slices, keyboard notes play pitched, and each pad's "
+                    "P-6 settings (start/end, loop, gate, reverse, tuning, level, "
+                    "pan, envelope, mono) are followed when its .PRM goes along. "
+                    "No filter, effects or knob motion: it is for recognising a "
+                    "pattern, not an exact copy of the P-6. Picking another pattern "
+                    "while it plays switches to that one.")
         add_tooltip(self.pattern_clear_btn,
                     "Empty the selected pattern the way the P-6's own clear does: "
                     "all notes, granular notes and knob motion go, tempo, length, "
@@ -31443,6 +31924,7 @@ class P6ManagerApp:
             # panel, so it lands between the two.
             self.pattern_panel.pack(fill="x", before=self.storage_outer)
         elif self.pattern_panel is not None:
+            self.stop_pattern_preview()
             self.pattern_panel.pack_forget()
         for cell in self.overview_slots.values():
             cell.set_slim(on)
@@ -31461,6 +31943,12 @@ class P6ManagerApp:
         self.pattern_save_btn.config_state("normal" if self.patterns else "disabled")
         self.pattern_clear_btn.config_state(
             "normal" if self.patterns and self.selected_pattern else "disabled")
+        sel = self.patterns.get(self.selected_pattern) if self.selected_pattern else None
+        self.pattern_play_btn.config_state(
+            "normal" if self._pattern_preview or (sel is not None and not sel.is_empty)
+            else "disabled")
+        self.pattern_play_btn.set_text(
+            "\u25a0 Stop" if self._pattern_preview else "\u25b6 Play")
         if self.pattern_source_dir:
             count = sum(1 for p in self.patterns.values() if p is not None)
             self.pattern_source_label.config(
@@ -31505,7 +31993,124 @@ class P6ManagerApp:
     def select_pattern(self, slot):
         self.selected_pattern = slot
         self._pattern_focus = "pattern"
+        preview = self._pattern_preview
+        if preview is not None and preview["slot"] != slot:
+            # Like picking the next pattern on the device while it plays.
+            pat = self.patterns.get(slot)
+            if pat is not None and not pat.is_empty:
+                self.play_pattern_preview(slot)
+            else:
+                self.stop_pattern_preview()
+                self.show_status(f"Stopped: pattern {pattern_slot_label(slot)} has "
+                                 f"no notes.", kind="info")
         self._refresh_pattern_links()
+
+    # ----- pattern preview -----------------------------------------------
+
+    def _pattern_voice_for(self, bank, pad):
+        return load_pad_voice(self._get_pad_state(bank, pad),
+                              force_mono=self.bank_force_mono(bank))
+
+    def toggle_pattern_preview(self):
+        if self._pattern_preview is not None:
+            self.stop_pattern_preview()
+        else:
+            self.play_pattern_preview(self.selected_pattern)
+
+    def play_pattern_preview(self, slot):
+        """Renders `slot`'s pattern with the samples now on the pads and
+        loops it. The whole loop is rendered first, so the timing is the
+        buffer's and never a timer's."""
+        pat = self.patterns.get(slot) if slot else None
+        if pat is None or pat.is_empty:
+            self.show_status("That pattern has no notes to play.", kind="info")
+            return
+        label = pattern_slot_label(slot)
+        try:
+            self.root.config(cursor="watch")
+            self.root.update_idletasks()
+            buf, step_s, info = render_pattern(pat, self._pattern_voice_for)
+        except Exception as e:
+            dark_showerror("Pattern preview", f"Could not render pattern {label}:\n{e}")
+            return
+        finally:
+            try:
+                self.root.config(cursor="")
+            except Exception as _e:
+                _swallowed(_e, "P6ManagerApp.play_pattern_preview")
+        missing = ", ".join(f"{b}{p}" for b, p in sorted(info["missing"]))
+        if not info["notes"]:
+            self.stop_pattern_preview()
+            self.show_status(f"Pattern {label} plays only empty pads"
+                             + (f" ({missing})." if missing else "."), kind="warning")
+            return
+        self.stop_pattern_preview(stop_audio=False)
+        self.stop_playback_waveform()
+        try:
+            sd.play(buf, PREVIEW_SR, loop=True)
+            stream = sd.get_stream()
+        except Exception as e:
+            dark_showerror("Playback Error", str(e))
+            return
+        self._pattern_preview = {
+            "slot": slot, "stream": stream, "start": time.monotonic(),
+            "step_s": step_s, "steps": max(1, pat.length), "after": None,
+            "step": None,
+        }
+        msg = f"Playing pattern {label} at {pat.tempo:g} BPM"
+        if missing:
+            msg += f" - empty pads: {missing}"
+        self.show_status(msg + ".", kind="warning" if missing else "success")
+        self._refresh_patterns_ui()
+        self._pattern_preview_tick()
+
+    def pattern_preview_step(self):
+        """(slot, step) the preview is on, or None when nothing plays."""
+        p = self._pattern_preview
+        if p is None or p["step"] is None:
+            return None
+        return p["slot"], p["step"]
+
+    def _pattern_preview_tick(self):
+        p = self._pattern_preview
+        if p is None:
+            return
+        p["after"] = None
+        try:
+            alive = sd.get_stream() is p["stream"] and p["stream"].active
+        except Exception:
+            alive = False
+        if not alive:
+            # Something else took the sound device (a pad's Play, say).
+            self.stop_pattern_preview(stop_audio=False)
+            return
+        elapsed = time.monotonic() - p["start"]
+        step = int(elapsed / p["step_s"]) % p["steps"]
+        if step != p["step"]:
+            p["step"] = step
+            if self._patterns_on_screen():
+                self.pattern_info.show_step(p["slot"], step)
+        p["after"] = self.root.after(30, self._pattern_preview_tick)
+
+    def stop_pattern_preview(self, stop_audio=True):
+        p = self._pattern_preview
+        if p is None:
+            return
+        self._pattern_preview = None
+        if p.get("after"):
+            try:
+                self.root.after_cancel(p["after"])
+            except Exception as _e:
+                _swallowed(_e, "P6ManagerApp.stop_pattern_preview")
+        if stop_audio:
+            try:
+                if sd.get_stream() is p["stream"]:
+                    sd.stop()
+            except Exception as _e:
+                _swallowed(_e, "P6ManagerApp.stop_pattern_preview")
+        if self._patterns_on_screen():
+            self.pattern_info.show_step(p["slot"], None)
+        self._refresh_patterns_ui()
 
     def clear_selected_pattern(self):
         slot = self.selected_pattern
