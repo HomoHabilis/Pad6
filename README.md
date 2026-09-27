@@ -2,7 +2,7 @@
 
 ![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
 
-**Version 5.2.0** - © 2026 Brian Siemund
+**Version 5.2.1** - © 2026 Brian Siemund
 
 ## Overview
 
@@ -358,7 +358,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager_5_2_0.py
+python PyP6-Roland-P6-Sample-Manager_5_2_1.py
 ```
 
 ---
@@ -391,7 +391,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager_5_2_0.py
+python3 -u ./PyP6-Roland-P6-Sample-Manager_5_2_1.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -893,7 +893,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_2_0.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_2_1.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
