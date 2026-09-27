@@ -28218,6 +28218,8 @@ def remap_patterns(patterns, mapping):
 #   PROB  10 is "always". Values above 10 turn up too and look like trigger
 #         conditions; those play every time here.
 #   NOTE  -1 with VELO 0 is an empty leftover, not a note.
+# Live recording can also leave several overlapping entries of the same pad
+# and note; a key cannot be pressed twice, so they play as one held note.
 # Still guesses: the SCALE order, and SUB (never set in those patterns).
 # ---------------------------------------------------------------------------
 
@@ -28335,8 +28337,46 @@ def pattern_step_notes(pattern):
                 done.add(id(e2))
                 e2 = e2["next"]
             notes.append(dict(e, steps=float(length), next=None, prev=None))
-    notes.sort(key=lambda n: n["step"])
-    return notes
+    return _merge_overlapping_keys(notes, length)
+
+
+def _merge_overlapping_keys(notes, length):
+    """One key cannot be pressed again while it is still held, and the P-6
+    plays it that way: a pattern recorded live can hold several overlapping
+    entries of the same pad and note (seven of them in one step), and they
+    sound as the one note already playing, not as a retrigger each. So
+    notes of the same pad and note that overlap become one, lasting until
+    the last of them ends - including one held over the loop's end into a
+    note at its start."""
+    def start(n):
+        return n["step"] + n["mt"] / 100.0
+
+    by_key = {}
+    for n in notes:
+        by_key.setdefault((n["part"], n["note"]), []).append(n)
+    out = []
+    for group in by_key.values():
+        group.sort(key=start)
+        merged = []
+        for n in group:
+            if merged:
+                cur = merged[-1]
+                end = start(cur) + cur["steps"]
+                if start(n) < end - 1e-6:
+                    cur["steps"] = max(end, start(n) + n["steps"]) - start(cur)
+                    continue
+            merged.append(dict(n))
+        if len(merged) > 1:
+            last, first = merged[-1], merged[0]
+            over = start(last) + last["steps"] - length
+            if over > start(first) + 1e-6:
+                last["steps"] = max(over, start(first) + first["steps"]) + length - start(last)
+                merged.pop(0)
+        for n in merged:
+            n["steps"] = min(n["steps"], float(length))
+        out.extend(merged)
+    out.sort(key=lambda n: (n["step"], n["part"], n["note"]))
+    return out
 
 
 def read_prm_values(path):
