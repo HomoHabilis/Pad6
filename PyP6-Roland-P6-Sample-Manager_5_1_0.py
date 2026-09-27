@@ -28493,9 +28493,12 @@ class PadVoice:
         return env
 
     def render_grains(self, note, velocity, gate_s, cut_s, g):
-        """A granular note: short windowed grains read around GRANU_HEAD_POS
-        and pitched by the note. Enough to hear the granular part's pitch
-        and texture in the mix, nothing like the device's engine."""
+        """A granular note: windowed grains of GRANU_SIZE frames, read from a
+        playhead that starts at GRANU_HEAD_POS and moves through the sample
+        at GRANU_HEAD_SPEED (percent of normal speed), each grain pitched by
+        the note. Grain starts are jittered so a slow or stopped head does
+        not turn into a buzz at the grain rate. Close to how the granular
+        part moves and sounds, not the device's engine."""
         sr = PREVIEW_SR
         release = _env_seconds(g.get("GRANU_TENV_RELEASE", 0))
         attack = _env_seconds(g.get("GRANU_TENV_ATTACK", 0))
@@ -28506,20 +28509,33 @@ class PadVoice:
             return None
         rel = (note if note >= 0 else PREVIEW_ROOT_NOTE) - PREVIEW_ROOT_NOTE
         semis = rel + g.get("GRANU_COARSE_TUNE", 0) + g.get("GRANU_FINE_TUNE", 0) / 100.0
-        speed = self.fs / sr * 2.0 ** (semis / 12.0)
-        grain = int(0.08 * sr)
-        hop = grain // 4
+        pitch = self.fs / sr * 2.0 ** (semis / 12.0)       # source frames per output frame
+        # GRANU_SIZE is in source frames (1764 = 40 ms at 44.1 kHz).
+        size_src = min(max(g.get("GRANU_SIZE", 1764), 64), min(n, int(self.fs)))
+        grain = max(int(size_src / pitch), 32)
+        grain = min(grain, int(0.5 * sr))
+        density = min(max(g.get("GRANU_GRAINS", 255), 1), 255) / 255.0
+        overlap = 1.0 + 3.0 * density                        # 1 .. 4 grains at a time
+        hop = max(int(grain / overlap), 16)
         window = np.hanning(grain).astype(np.float32)[:, None]
-        head = g.get("GRANU_HEAD_POS", 0) % n
+        head0 = g.get("GRANU_HEAD_POS", 0) % n
+        head_speed = g.get("GRANU_HEAD_SPEED", 100) / 100.0 * self.fs / sr
         spread = int(n * min(max(g.get("GRANU_SPREAD", 0), 0), 255) / 255.0 * 0.1)
+        jitter = max(int(size_src * 0.25), 1)
         rng = random.Random(note * 7919 + frames)
         out = np.zeros((frames + grain, 2), dtype=np.float32)
-        idx = np.arange(grain, dtype=np.float64) * speed
-        for at in range(0, frames, hop):
-            src = head + (rng.randint(-spread, spread) if spread else 0)
+        idx = np.arange(grain, dtype=np.float64) * pitch
+        at = 0
+        while at < frames:
+            src = head0 + at * head_speed + rng.randint(-jitter, jitter)
+            if spread:
+                src += rng.randint(-spread, spread)
             pos = np.mod(src + idx, n).astype(np.int64)
             out[at:at + grain] += self.audio[pos] * window
-        out = out[:frames] * (0.5 * min(max(g.get("GRANU_LEVEL", 100), 0), 127) / 100.0)
+            at += max(1, hop + rng.randint(-hop // 3, hop // 3))
+        # A Hann window summed at this overlap is about overlap / 2 high.
+        gain = min(max(g.get("GRANU_LEVEL", 100), 0), 127) / 100.0 / max(overlap / 2.0, 1.0)
+        out = out[:frames] * gain
         t = np.arange(frames, dtype=np.float32) / sr
         env = np.ones(frames, dtype=np.float32)
         if attack > 0.002:
