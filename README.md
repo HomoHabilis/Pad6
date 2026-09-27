@@ -2,7 +2,7 @@
 
 ![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
 
-**Version 5.1.0** - © 2026 Brian Siemund
+**Version 5.2.0** - © 2026 Brian Siemund
 
 ## Overview
 
@@ -26,6 +26,21 @@ pad into 255 waveforms you step through with the START knob.
 If it saves you time, there is a Ko-fi link under **Settings → Donate**:
 [ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack). The app is free and
 stays free.
+
+---
+
+## What's New in 5.2
+
+### Hear a pattern before you move it
+
+In the **All banks + patterns** view, **▶ Play** (or a double-click on a
+pattern) plays it in a loop with the samples that are on the pads right now,
+and a cursor walks through its steps. Chopped pads play their slices,
+keyboard parts play pitched, held notes are held, and each pad's P-6
+settings are followed. See 5.6.
+
+Saving a **preset** now also gives each sample's P-6 settings file the
+number of the pad it is saved on, as sending a bank to the P-6 already did.
 
 ---
 
@@ -343,7 +358,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager_5_1_0.py
+python PyP6-Roland-P6-Sample-Manager_5_2_0.py
 ```
 
 ---
@@ -376,7 +391,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager_5_1_0.py
+python3 -u ./PyP6-Roland-P6-Sample-Manager_5_2_0.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -878,7 +893,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_1_0.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Sample-Manager_5_2_0.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
