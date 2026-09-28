@@ -75,8 +75,40 @@ re-extracts the wavetables and blank pattern from the desktop script (both need 
 1. **Let GitHub build it:** push the branch; the **Android** workflow (`.github/workflows/android.yml`) runs all of the
    above and uploads the `android` (APK) and `android-screenshots` artifacts. Also runnable via *Run workflow*.
 2. **Core only**, as above.
-3. **Screenshots without AGP** (what was done while porting; fragile): a plain Kotlin/JVM Gradle project that compiles
-   `app/src/main/java` + `app/src/test/java` against `platforms/android-37/android.jar` and AndroidX classes jars
-   extracted from the AARs, with a hand-generated `R` class, Robolectric pointed at the resources through
-   `test_config.properties`, and `-Drobolectric.offline=true -Drobolectric.dependency.dir=<dir with android-all jar>`.
-   Only worth it when option 1 is impossible.
+3. **Screenshot tests without AGP:** the sandbox below. This is how the UI was checked while porting.
+
+## Screenshot-test sandbox (no Google Maven)
+
+`tools/sandbox/` runs the app's Robolectric screenshot tests (`app/src/test/.../ScreenshotTest.kt`) in a plain
+Kotlin/JVM Gradle project, with every Google-Maven-only piece taken from somewhere else:
+
+| Normally from Google | Sandbox source |
+|---|---|
+| AGP (compiles resources, generates `R`, writes Robolectric's `test_config.properties`) | `aapt2` run by `run.sh`; the properties file is written by `setup.sh` |
+| `aapt2`, `android.jar` (platform 36) | layers of the public Docker image `cimg/android` pulled with `curl` (no Docker needed) |
+| AndroidX / Compose AARs | Xamarin.AndroidX NuGet packages, which embed the original AARs (latest versions, not the exact pinned ones) |
+| `androidx.test:monitor` (needed by Robolectric) | compiled from source (`github.com/android/android-test`, sparse clone) |
+| Robolectric's Android runtime download | `android-all-instrumented` jar from Maven Central, used with `robolectric.offline` |
+
+Needs JDK 17+, `python3`, `curl`, `git`, `unzip`, and access to Docker Hub, NuGet, GitHub and Maven Central
+(check with `curl -sI https://registry-1.docker.io/v2/ https://api.nuget.org/v3/index.json`).
+
+```sh
+android/tools/sandbox/setup.sh /opt/pyp6-sandbox     # once: ~3 GB download (mostly Docker layers), ~600 MB kept, ~4 min
+android/tools/sandbox/run.sh   /opt/pyp6-sandbox     # all 22 screens, ~6 min -> /opt/pyp6-sandbox/screenshots/*.png
+android/tools/sandbox/run.sh   /opt/pyp6-sandbox --tests '*PadsShot'   # one screen
+```
+
+`setup.sh` skips steps whose output exists (delete the folder to redo one) and rewrites the Gradle files every time;
+`run.sh` recompiles the resources on every run, so edits to `app/src/main/res` are picked up. The project compiles the
+repo's sources in place: edit the app, re-run `run.sh`, look at the PNGs.
+
+What it does not do: build an APK, run R8, or check AAR metadata/`compileSdk` - that is still only the real build
+(CI). Known quirks it works around:
+
+- Robolectric downloads its runtime from Maven Central on first use and got HTTP 429 there; hence the offline jar.
+- `androidx.test:monitor`'s two `ExposedInstrumentationApi` classes have the same simple name, so they are compiled
+  as separate modules (`monitorhidden`, `monitorruntime`).
+- Test classes are listed with `include("**/*Shot.class")` and class scanning off; otherwise Gradle finds no tests
+  in the abstract base classes.
+- `forkEvery = 1`, as in the real build (see Pitfalls).
