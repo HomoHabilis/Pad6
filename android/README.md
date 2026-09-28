@@ -78,7 +78,8 @@ cd android
 ./gradlew :app:testDebugUnitTest  # screenshot tests -> app/build/screenshots
 ```
 
-Needs JDK 17+ and the Android SDK (platform 37). The **Android** GitHub
+Needs JDK 17+ and the Android SDK (platform 37); see [BUILDING.md](BUILDING.md)
+for a step-by-step setup and the known pitfalls. The **Android** GitHub
 workflow does all of this on every push that touches `android/`.
 
 - `core/` is plain Kotlin (no Android): WAV I/O, resampling, editing, time
