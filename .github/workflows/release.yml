@@ -269,9 +269,17 @@ jobs:
           retention-days: 7
           compression-level: 0
 
+  # The Android APK, built by the Android workflow, only for a release.
+  android:
+    name: Android APK
+    if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/android.yml
+    with:
+      version: ${{ inputs.tag || github.ref_name }}
+
   release:
     name: Publish GitHub Release
-    needs: build
+    needs: [build, android]
     # Same condition as RELEASE_TAG being set (a job-level if cannot read env).
     if: inputs.tag != '' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -329,11 +337,13 @@ jobs:
           | \`PyP6-$RELEASE_TAG-macos-arm64.zip\` | Macs with Apple Silicon (M1 and later) |
           | \`PyP6-$RELEASE_TAG-macos-x64.zip\` | Intel Macs |
           | \`PyP6-$RELEASE_TAG-linux-x64.tar.gz\` | 64-bit Linux |
+          | \`PyP6-$RELEASE_TAG-android.apk\` | Android phones (Android 11 or newer), installed outside the Play Store |
 
           **First launch:**
           - **Windows:** SmartScreen may warn about an unsigned app. Choose "Run anyway".
           - **macOS:** the app is not signed with an Apple certificate. Right-click it, choose **Open**, then **Open** again (on macOS 15 and later, allow it under System Settings → Privacy & Security).
           - **Linux:** audio playback needs PortAudio from your distribution, e.g. \`sudo apt install libportaudio2\`.
+          - **Android:** open the APK on the phone and allow installing from that source when asked. See android/README.md.
           EOF
           fi
           cat notes.md

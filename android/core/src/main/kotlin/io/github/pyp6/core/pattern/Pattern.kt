@@ -239,7 +239,7 @@ class P6Pattern(val text: String) {
             out
         }
 
-        internal fun intOr(text: String?, default: Int?): Int? = text?.trim()?.toIntOrNull() ?: default
+        fun intOr(text: String?, default: Int?): Int? = text?.trim()?.toIntOrNull() ?: default
 
         /** Python's str.splitlines() for the line breaks these files can contain. */
         internal fun splitLines(text: String): List<String> =

@@ -54,13 +54,18 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
+        buildConfig = false
     }
 
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
-            all { it.maxHeapSize = "3g" }
+            all {
+                it.maxHeapSize = "3g"
+                // Compose keeps global state bound to the first test's main looper;
+                // one JVM per test class keeps every screenshot fresh.
+                it.forkEvery = 1
+            }
         }
     }
 

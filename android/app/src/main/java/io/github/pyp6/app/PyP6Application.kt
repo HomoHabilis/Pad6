@@ -24,6 +24,7 @@ class AppContainer(app: Application) {
     val device = DeviceMonitor(app, settings, scope)
     val waveLibrary = WaveLibrary(File(app.filesDir, "waveforms.json"))
     val internalPresets = File(app.filesDir, "presets").also { it.mkdirs() }
+    val appVersion: String = runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull() ?: "dev"
 }
 
 class PyP6Application : Application() {

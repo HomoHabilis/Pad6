@@ -3,3 +3,4 @@
 *.PRM -text
 *.wav binary
 *.jks binary
+*.f32 binary

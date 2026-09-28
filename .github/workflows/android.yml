@@ -1,0 +1,105 @@
+name: Android
+
+# Builds the Android app (android/): runs the core tests (which compare the
+# Kotlin port against the desktop app's own results), renders the screenshot
+# tests at phone size, and produces an installable APK.
+#
+# Pushes and pull requests that touch android/ build it as a check; the APK
+# and the screenshots are kept as workflow artifacts for a few days. The
+# Build & Release workflow calls this one too, so every release carries the
+# APK next to the desktop downloads.
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version to stamp into the APK: a release tag such as v5.3.0 (the v is dropped)"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # All history and tags: the version is taken from git describe.
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Version
+        id: version
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            name="${{ inputs.version }}"
+            name="${name#v}"
+          else
+            described=$(git describe --tags --match 'v[0-9]*' 2>/dev/null || true)
+            name="${described#v}"
+            name="${name:-0.0.0-dev}"
+          fi
+          # Always increasing, so a newer APK installs over an older one.
+          code=$(git rev-list --count HEAD)
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Version $name ($code)"
+
+      - name: Core tests
+        run: ./gradlew :core:test --console=plain
+
+      - name: Build the APK
+        run: |
+          ./gradlew :app:assembleRelease --console=plain \
+            -Ppyp6.versionName="${{ steps.version.outputs.name }}" \
+            -Ppyp6.versionCode="${{ steps.version.outputs.code }}"
+          mkdir -p out
+          cp app/build/outputs/apk/release/app-release.apk "out/PyP6-v${{ steps.version.outputs.name }}-android.apk"
+          ls -la out
+
+      - name: Screenshot tests
+        run: ./gradlew :app:testDebugUnitTest --console=plain
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: android/out/*.apk
+          retention-days: 7
+          compression-level: 0
+
+      # Not when building for a release: the release collects every
+      # artifact of the run as a download.
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.version == ''
+        with:
+          name: android-screenshots
+          path: android/app/build/screenshots/
+          retention-days: 7
