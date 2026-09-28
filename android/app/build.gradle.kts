@@ -11,7 +11,7 @@ val appVersionCode = providers.gradleProperty("pyp6.versionCode").orElse("1").ge
 
 android {
     namespace = "io.github.pyp6.app"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.github.pyp6.android"
