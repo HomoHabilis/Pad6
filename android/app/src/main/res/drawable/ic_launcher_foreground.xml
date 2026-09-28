@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Six pads in two rows with a waveform across them: the P-6's pad grid. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:translateX="27" android:translateY="30">
+        <path android:fillColor="#33333E" android:pathData="M2,0h14a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-14a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        <path android:fillColor="#33333E" android:pathData="M22,0h10a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-10a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        <path android:fillColor="#33333E" android:pathData="M38,0h14a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-14a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        <path android:fillColor="#5FA6C0" android:pathData="M2,30h14a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-14a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        <path android:fillColor="#33333E" android:pathData="M22,30h10a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-10a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        <path android:fillColor="#6BB06F" android:pathData="M38,30h14a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-14a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        <path
+            android:strokeColor="#E8E8ED"
+            android:strokeWidth="2.6"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"
+            android:pathData="M0,24 L6,24 L9,19 L12,29 L15,15 L18,33 L21,20 L24,27 L27,22 L30,26 L33,23 L36,25 L40,24 L54,24" />
+    </group>
+</vector>

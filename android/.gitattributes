@@ -1,0 +1,5 @@
+*.i16 binary
+*.prm -text
+*.PRM -text
+*.wav binary
+*.jks binary
