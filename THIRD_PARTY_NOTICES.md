@@ -1,6 +1,6 @@
 # Third-party notices
 
-PyP6's own license is in [LICENSE](LICENSE). The downloads also contain the
+Pad6's own license is in [LICENSE](LICENSE). The downloads also contain the
 following third-party software, each under its own license. The license
 texts are on the linked project pages.
 

@@ -115,7 +115,7 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
             }
 
             Section("About") {
-                Text("PyP6 for Android ${vm.c.appVersion}", style = MaterialTheme.typography.bodyLarge)
+                Text("Pad6 for Android ${vm.c.appVersion}", style = MaterialTheme.typography.bodyLarge)
                 MutedText("Roland AIRA P-6 files manager. Chop is inspired by p6-wave-slice by Warren Blackwell. Not affiliated with Roland.")
                 MutedText("Thanks to the original PyP6 project, which this one is built on.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

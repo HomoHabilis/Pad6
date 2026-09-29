@@ -1,6 +1,6 @@
-# PyP6 for Android
+# Pad6 for Android
 
-The PyP6 files manager for the Roland AIRA P-6, on an Android phone. It is
+The Pad6 files manager for the Roland AIRA P-6, on an Android phone. It is
 a native app (Kotlin, Jetpack Compose, Material 3) built from the same logic
 as the desktop app, and it talks to the P-6 the same way: over USB, with the
 P-6 in storage mode showing up as a drive.
@@ -34,7 +34,7 @@ app's settings in Obtainium.
 1. Get the APK:
    - from a release on the
      [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases)
-     (`PyP6-vX.Y.Z-android.apk`), or
+     (`Pad6-vX.Y.Z-android.apk`), or
    - from the latest **Android** workflow run on the Actions tab (artifact
      `android`, a zip holding the APK).
 2. Open the APK on the phone (Files app or the browser's downloads).
@@ -47,9 +47,10 @@ purpose), so a newer APK installs over an older one and keeps your samples,
 presets and settings. It is a sideloading key for a personal install, not a
 store identity.
 
-**Upgrading from a build before the package rename** (app ID
-`io.github.pyp6.android`, now `io.github.homohabilis.p6filesmanager`): the new
-APK installs as a separate app next to the old one and starts empty. To carry
+**Upgrading from a build made before the rename to Pad6** (app ID
+`io.github.pyp6.android` or `io.github.homohabilis.p6filesmanager`, now
+`io.github.homohabilis.pad6`): the new APK installs as a separate app next to
+the old one and starts empty. To carry
 your work over, save presets to a shared folder in the old app (Presets →
 choose a folder) and export your own waveforms as `.p6wf` packs (Settings),
 load both in the new app, then uninstall the old one. The P-6 drive has to be

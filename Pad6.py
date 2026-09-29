@@ -117,37 +117,149 @@ import uuid
 
 # The logo, embedded so the app needs no companion file - a lone .png next
 # to the script goes missing the moment someone moves just the .py, and the
-# PyInstaller build no longer has to bundle it either. 128x92, reduced to a
-# 32-colour palette: visually identical here, a fifth of the size.
-PYP6_LOGO_PNG = (
-    "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"
+# PyInstaller build no longer has to bundle it either. "Pad" in blue, the
+# "6" in yellow, on transparency.
+APP_LOGO_PNG = (
+    "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"
+    "1mZt1matof1/g1Tp6LvapBoAAAAASUVORK5CYII="
 )
 
 
@@ -500,8 +612,8 @@ def warn_pydub_missing_once():
         "Play/Preview/Export while pydub/ffmpeg is missing."
     )
 
-APP_NAME = "PyP6"
-APP_SUBTITLE = "Roland AIRA P-6 Files Manager"
+APP_NAME = "Pad6"
+APP_SUBTITLE = "Files manager for the Roland AIRA P-6"
 # The git tag is the only place a release number is written down. The
 # release build replaces this line with the tag it was built from (v5.2.1
 # -> "5.2.1"), so the source never needs a commit to bump it.
@@ -3282,10 +3394,10 @@ def import_user_family_pack(path):
     with open(path, "rb") as f:
         blob = json.loads(lzma.decompress(f.read()).decode("utf-8"))
     if not isinstance(blob, dict) or "shapes" not in blob:
-        raise ValueError("not a PyP6 waveform pack")
+        raise ValueError("not a waveform pack")
     if int(blob.get("format", 0)) > USER_FAMILY_FORMAT:
         raise ValueError(
-            f"this pack was written by a newer PyP6 (format "
+            f"this pack was written by a newer {APP_NAME} (format "
             f"{blob.get('format')}, this build reads {USER_FAMILY_FORMAT})")
     group = str(blob.get("group") or WT_DEFAULT_USER_GROUP)
     out = []
@@ -4115,7 +4227,7 @@ def safe_base_name(path, max_len=48, strip_tags=False, fallback="sample"):
     base = base[:max_len].strip(" .")
     # CON, PRN, AUX, NUL, COM1-9 and LPT1-9 are device names on Windows: any
     # attempt to open a file called that fails, with or without an extension.
-    # PyP6 targets Windows as well, and a sample innocently named "aux.wav"
+    # Pad6 targets Windows as well, and a sample innocently named "aux.wav"
     # is not far-fetched.
     if base.upper() in _RESERVED_DEVICE_NAMES:
         base += "_"
@@ -14350,7 +14462,7 @@ NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 # C#5. Transposition on the device therefore SPENDS this budget rather
 # than moving it - a semitone on the pitch knob leaves 35 on the keyboard.
 #
-# Pitch applied in PyP6 is a different matter and does move it, because it
+# Pitch applied in Pad6 is a different matter and does move it, because it
 # is rendered into the file: the sample's own pitch becomes the new one,
 # and the three octaves are measured from there.
 #
@@ -22675,7 +22787,7 @@ def write_wavetable_map(rows, meta, csv_path, cfg=None):
 
     with open(csv_path, "w", newline="") as f:
         wr = _csv.writer(f)
-        wr.writerow(["PyP6 wavetable overview"])
+        wr.writerow([f"{APP_NAME} wavetable overview"])
         if source:
             wr.writerow(["Built from", source])
         if register:
@@ -28146,7 +28258,7 @@ def remap_patterns(patterns, mapping):
 #   - each pad's .PRM, when the device would still get it: START_POS/SIZE,
 #     LOOP, GATE, REVERSE, CHOP, C.TUNE/F.TUNE, LEVEL, PAN, the amp
 #     envelope, MONO_POLY and MUTE_GROUP;
-#   - the pad's own PyP6 settings: pitch (vari-speed, as exported) and
+#   - the pad's own Pad6 settings: pitch (vari-speed, as exported) and
 #     force mono.
 #
 # CHOP > 1 splits the sample into that many equal slices, played from C4
@@ -29276,7 +29388,7 @@ class P6ManagerApp:
         global _DND_APP
         self.root = root
         _DND_APP = self  # so dnd_status_text() can report the live registration state
-        self.root.title(f"{APP_NAME} {APP_SUBTITLE} {APP_VERSION}")
+        self.root.title(f"{APP_NAME} - {APP_SUBTITLE} - {APP_VERSION}")
         self.root.configure(bg=BG_DARK)
         self.root.resizable(True, True)
         self.root.bind_all("<Control-z>", lambda e: self.undo())
@@ -29635,19 +29747,19 @@ class P6ManagerApp:
 
         Built from the embedded copy first. A file next to the script is
         still honoured if one is there, so anyone who wants to swap the logo
-        can drop their own pyp6logo.png beside it. Neither is required - the
+        can drop their own pad6logo.png beside it. Neither is required - the
         corner simply stays empty if both fail.
         """
         full_img = None
         try:
-            logo_path = resource_path("pyp6logo.png")
+            logo_path = resource_path("pad6logo.png")
             if os.path.exists(logo_path):
                 full_img = tk.PhotoImage(file=logo_path)
         except Exception as e:
-            print(f"Could not load pyp6logo.png, using the built-in logo: {e}")
+            print(f"Could not load pad6logo.png, using the built-in logo: {e}")
         if full_img is None:
             try:
-                full_img = tk.PhotoImage(data=PYP6_LOGO_PNG)
+                full_img = tk.PhotoImage(data=APP_LOGO_PNG)
             except Exception as e:
                 print(f"Could not build the logo: {e}")
                 return

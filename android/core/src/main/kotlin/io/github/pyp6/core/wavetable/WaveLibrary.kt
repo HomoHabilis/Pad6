@@ -80,7 +80,7 @@ class WaveLibrary(private val file: File) {
         fun importPack(bytes: ByteArray): Pair<String, List<WaveEntry>> {
             val text = XZInputStream(ByteArrayInputStream(bytes)).use { String(it.readBytes(), Charsets.UTF_8) }
             val pack = Project.json.decodeFromString(Pack.serializer(), text)
-            require(pack.format <= FORMAT) { "this pack was written by a newer PyP6 (format ${pack.format}, this build reads $FORMAT)" }
+            require(pack.format <= FORMAT) { "this pack was written by a newer Pad6 (format ${pack.format}, this build reads $FORMAT)" }
             val group = pack.group ?: Wavetable.DEFAULT_USER_GROUP
             val out = pack.shapes.mapNotNull { sh ->
                 if (sh.kind == "multi") {

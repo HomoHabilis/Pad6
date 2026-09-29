@@ -118,7 +118,7 @@ fun BanksScreen(vm: MainViewModel, nav: Nav) {
     }
 
     ScreenScaffold(
-        title = "PyP6",
+        title = "Pad6",
         subtitle = "Roland P-6 files manager",
         topLevel = true,
         actions = {

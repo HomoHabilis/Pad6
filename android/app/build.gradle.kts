@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         // io.github.<GitHub account>: the account this is published from.
-        applicationId = "io.github.homohabilis.p6filesmanager"
+        applicationId = "io.github.homohabilis.pad6"
         minSdk = 30
         targetSdk = 36
         versionCode = appVersionCode

@@ -90,7 +90,7 @@ jobs:
             -Ppyp6.versionName="${{ steps.version.outputs.name }}" \
             -Ppyp6.versionCode="${{ steps.version.outputs.code }}"
           mkdir -p out
-          cp app/build/outputs/apk/release/app-release.apk "out/PyP6-v${{ steps.version.outputs.name }}-android.apk"
+          cp app/build/outputs/apk/release/app-release.apk "out/Pad6-v${{ steps.version.outputs.name }}-android.apk"
           ls -la out
 
       - name: Screenshot tests
