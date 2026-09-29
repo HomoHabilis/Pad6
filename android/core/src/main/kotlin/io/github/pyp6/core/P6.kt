@@ -4,7 +4,7 @@ package io.github.pyp6.core
  * Facts about the Roland AIRA P-6 that the whole app shares.
  *
  * Mirrors the constants block of the desktop script
- * (PyP6-Roland-P6-Sample-Manager.py): banks A-H, six pads each, the four
+ * (PyP6-Roland-P6-Files-Manager.py): banks A-H, six pads each, the four
  * sample rates the device accepts and how long a sample may be at each.
  */
 object P6 {

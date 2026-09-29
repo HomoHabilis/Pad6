@@ -501,17 +501,14 @@ def warn_pydub_missing_once():
     )
 
 APP_NAME = "PyP6"
-APP_SUBTITLE = "Roland AIRA P-6 Sample Manager"
+APP_SUBTITLE = "Roland AIRA P-6 Files Manager"
 # The git tag is the only place a release number is written down. The
 # release build replaces this line with the tag it was built from (v5.2.1
 # -> "5.2.1"), so the source never needs a commit to bump it.
 APP_VERSION = None
-APP_AUTHOR = "Brian Siemund"
-APP_YEAR = "2026"
-APP_URL = "https://github.com/j0kerpack/Roland-P6-sample-manager"
-# Shown in About and carried by "Copy Info", so a bug report pasted from
-# there has it too.
-APP_SUPPORT_URL = "https://ko-fi.com/j0kerpack"
+APP_URL = "https://github.com/HomoHabilis/Roland-P6-files-manager"
+# The project this one grew out of, thanked in About and the README.
+ORIGINAL_PROJECT_URL = "https://github.com/j0kerpack/Roland-P6-sample-manager"
 # The window title and the About box both read these, so they always agree.
 
 PYP6_DEBUG = bool(os.environ.get("PYP6_DEBUG"))
@@ -637,10 +634,8 @@ def collect_about_info():
     which is the whole reason the optional-dependency state is in here."""
     rows = []
     rows.append(("Version", APP_VERSION))
-    rows.append(("Author", APP_AUTHOR))
-    rows.append(("Copyright", f"\u00a9 {APP_YEAR} {APP_AUTHOR}"))
     rows.append(("Project", APP_URL))
-    rows.append(("Support", APP_SUPPORT_URL))
+    rows.append(("License", "see LICENSE in the project"))
     try:
         rows.append(("Python", f"{sys.version.split()[0]} on {sys.platform}"))
     except Exception as _e:
@@ -934,8 +929,8 @@ def _volume_names(path):
     """The volume a given .../IMPORT path sits on, as a set of candidates.
 
     A set rather than one name because the layout is ambiguous by design:
-    in /media/brian/P-6/IMPORT the "P-6" is the volume label, while in
-    /media/brian/MYSTICK/P-6/IMPORT it is the folder the device writes on a
+    in /media/user/P-6/IMPORT the "P-6" is the volume label, while in
+    /media/user/MYSTICK/P-6/IMPORT it is the folder the device writes on a
     stick called MYSTICK. Both readings are kept and either may match.
     """
     parts = [p for p in os.path.normpath(path).split(os.sep) if p]
@@ -950,7 +945,7 @@ def _volume_names(path):
     if tail[-1] == "P-6" and len(tail) >= 2:
         names.add(tail[-2])
     # On Debian and Ubuntu the layout is /media/<user>/<label>/..., so for
-    # /media/brian/P-6/IMPORT the component before "P-6" is the USERNAME,
+    # /media/user/P-6/IMPORT the component before "P-6" is the USERNAME,
     # not a volume - and keeping it meant a stick that happened to share the
     # user's name was accepted as "your P-6 is back". The reading it exists
     # for (a stick called MYSTICK with a P-6 folder on it) is unaffected.
@@ -13692,85 +13687,6 @@ class ImportBankDialog(tk.Toplevel):
         self.destroy()
 
 
-class DonateDialog(tk.Toplevel):
-    """A small window holding nothing but the Ko-fi link.
-
-    Its own window rather than a message box: the point is the URL, and it
-    has to be selectable. dark_showinfo() draws its body as a Label, which
-    Tk will not let you select text in - the link would be readable and
-    uncopyable, which is the one thing it must not be.
-    """
-
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Support PyP6")
-        self.configure(bg=BG_DARK)
-        self.resizable(False, False)
-
-        outer = tk.Frame(self, bg=BG_DARK, padx=22, pady=20)
-        outer.pack(fill="both", expand=True)
-
-        head = tk.Label(outer, text="Support this project", anchor="w")
-        style_label(head, fg=ACCENT_ORANGE, font=ui_font(13, "bold"))
-        head.pack(fill="x")
-
-        body = tk.Label(
-            outer, anchor="w", justify="left",
-            text=("PyP6 is free and stays free. If it saved you some time, "
-                  "a coffee is always welcome."))
-        style_label(body, fg=FG_TEXT, font=ui_font(9))
-        body.pack(fill="x", pady=(6, 12))
-
-        link = tk.Entry(outer, bd=0, highlightthickness=0,
-                        readonlybackground=BG_INPUT, fg=ACCENT_ORANGE,
-                        font=ui_font(11, "bold"), cursor="xterm", justify="center",
-                        selectbackground=ACCENT_ORANGE, selectforeground=ON_ACCENT_ORANGE)
-        link.insert(0, APP_SUPPORT_URL)
-        link.config(state="readonly")
-        link.pack(fill="x", ipady=8)
-        add_tooltip(link, "Select the text to copy it, or use \u201cCopy Link\u201d.")
-
-        row = tk.Frame(outer, bg=BG_DARK)
-        row.pack(fill="x", pady=(14, 0))
-        RoundedButton(row, text="Close", command=self.destroy,
-                      bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK,
-                      width=90).pack(side="right", padx=4)
-        self.copy_btn = RoundedButton(row, text="Copy Link", command=self._copy,
-                                      bg=BTN_ORANGE, fg="#FFFFFF",
-                                      parent_bg=BG_DARK, width=110)
-        self.copy_btn.pack(side="right", padx=4)
-
-        self.bind("<Escape>", lambda _e: self.destroy())
-        self.transient(parent)
-        center_toplevel_on_parent(self, parent)
-        self._safe_grab()
-
-    def _copy(self):
-        try:
-            self.clipboard_clear()
-            self.clipboard_append(APP_SUPPORT_URL)
-            self.update()          # some window managers drop it without this
-            self.copy_btn.set_text("Copied")
-            # Back to the original label, so a second visit does not open on
-            # a button still claiming the job is done.
-            self.after(1500, lambda: self.copy_btn.winfo_exists()
-                       and self.copy_btn.set_text("Copy Link"))
-        except tk.TclError as _e:
-            _swallowed(_e, "DonateDialog._copy")
-
-    def _safe_grab(self, attempt=0):
-        try:
-            self.update_idletasks()
-            self.grab_set()
-        except tk.TclError:
-            if attempt < 20:
-                self.after(50, lambda: self._safe_grab(attempt + 1))
-            return
-        self.deiconify()
-        self.lift()
-        self.focus_force()
-
-
 class AboutDialog(tk.Toplevel):
     """About box, opened from Settings.
 
@@ -13802,9 +13718,10 @@ class AboutDialog(tk.Toplevel):
 
         desc_label = tk.Label(
             outer, anchor="w", justify="left", wraplength=sc(500),
-            text=("Manages samples for the Roland AIRA P-6: load, trim, chop and "
-                  "normalize audio, then write complete banks to the device's "
-                  "IMPORT folder."))
+            text=("Manages the files of the Roland AIRA P-6: load, trim, chop and "
+                  "normalize samples, build wavetables, write complete banks to "
+                  "the device's IMPORT folder, and back up, preview and restore "
+                  "its patterns."))
         style_label(desc_label, fg=FG_TEXT, font=ui_font(9))
         desc_label.pack(fill="x", pady=(0, 12))
 
@@ -13826,22 +13743,20 @@ class AboutDialog(tk.Toplevel):
         # the same reason: selectable and copyable, and it cannot fail
         # silently the way a click handler with no desktop handler behind
         # it would.
-        support_row = tk.Frame(outer, bg=BG_DARK)
-        support_row.pack(fill="x", pady=(0, 12))
-        support_lbl = tk.Label(support_row, text="Support development:", anchor="w")
-        style_label(support_lbl, fg=FG_MUTED, font=ui_font(9))
-        support_lbl.pack(side="left", padx=(0, 6))
-        support_link = tk.Entry(support_row, bd=0, highlightthickness=0,
-                                readonlybackground=BG_DARK, fg=ACCENT_ORANGE,
-                                font=ui_font(9), cursor="xterm",
-                                selectbackground=ACCENT_ORANGE,
-                                selectforeground=ON_ACCENT_ORANGE)
-        support_link.insert(0, APP_SUPPORT_URL)
-        support_link.config(state="readonly")
-        support_link.pack(side="left", fill="x", expand=True)
-        add_tooltip(support_link,
-                    "Ko-fi page. PyP6 is free and stays free - this is only if "
-                    "you feel like buying a coffee.")
+        thanks_row = tk.Frame(outer, bg=BG_DARK)
+        thanks_row.pack(fill="x", pady=(0, 12))
+        thanks_lbl = tk.Label(thanks_row, text="Thanks to the original project:", anchor="w")
+        style_label(thanks_lbl, fg=FG_MUTED, font=ui_font(9))
+        thanks_lbl.pack(side="left", padx=(0, 6))
+        thanks_link = tk.Entry(thanks_row, bd=0, highlightthickness=0,
+                               readonlybackground=BG_DARK, fg=ACCENT_BLUE,
+                               font=ui_font(9), cursor="xterm",
+                               selectbackground=ACCENT_BLUE,
+                               selectforeground=ON_ACCENT_BLUE)
+        thanks_link.insert(0, ORIGINAL_PROJECT_URL)
+        thanks_link.config(state="readonly")
+        thanks_link.pack(side="left", fill="x", expand=True)
+        add_tooltip(thanks_link, "The project this one is built on.")
 
         info_panel = RoundedPanel(outer, title="Details", parent_bg=BG_DARK,
                                    panel_bg=BG_PANEL, border=BORDER_LIGHT, radius=14,
@@ -14231,13 +14146,8 @@ class SettingsDialog(tk.Toplevel):
         about_btn = RoundedButton(btn_row, text="About", command=self._open_about,
                                    bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=90)
         about_btn.pack(side="left", padx=4)
-        donate_btn = RoundedButton(btn_row, text="Donate", command=self._open_donate,
-                                   bg=BG_INPUT, fg=ACCENT_ORANGE, parent_bg=BG_DARK,
-                                   width=90)
-        donate_btn.pack(side="left", padx=4)
-        add_tooltip(donate_btn, "The Ko-fi link, in a window you can copy it from.")
         add_tooltip(about_btn,
-                    "Version, author and the state of the optional components (pydub, "
+                    "Version, license and the state of the optional components (pydub, "
     "ffmpeg, drag & drop).")
 
         self.transient(parent)
@@ -14253,18 +14163,6 @@ class SettingsDialog(tk.Toplevel):
         except tk.TclError as _e:
             _swallowed(_e, "SettingsDialog._open_about")
         dlg = AboutDialog(self)
-        self.wait_window(dlg)
-        self._safe_grab()
-
-    def _open_donate(self):
-        """Same grab handover as _open_about() - two stacked grab_set()
-        windows otherwise leave Settings unresponsive on some window
-        managers once the child closes."""
-        try:
-            self.grab_release()
-        except tk.TclError as _e:
-            _swallowed(_e, "SettingsDialog._open_donate")
-        dlg = DonateDialog(self)
         self.wait_window(dlg)
         self._safe_grab()
 

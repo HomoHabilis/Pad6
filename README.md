@@ -1,9 +1,8 @@
-# PyP6 - Roland P-6 Sample Manager
+# PyP6 - Roland P-6 Files Manager
 
-![Roland-P6-sample-manager](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6main.png)
+![PyP6 main window](PyP6main.png)
 
 [![Latest release](https://img.shields.io/github/v/release/HomoHabilis/Roland-P6-files-manager)](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
-© 2026 Brian Siemund
 
 ## Overview
 
@@ -24,9 +23,9 @@ pad into 255 waveforms you step through with the START knob.
 > installation, pip packages, or separate ffmpeg setup are required - just
 > download and run. See Section 2.1.
 
-If it saves you time, there is a Ko-fi link under **Settings → Donate**:
-[ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack). The app is free and
-stays free.
+> **On an Android phone:** the same features as a native app, talking to
+> the P-6 over USB the same way. See [android/README.md](android/README.md);
+> the APK is attached to each release.
 
 ---
 
@@ -359,7 +358,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Sample-Manager.py
+python PyP6-Roland-P6-Files-Manager.py
 ```
 
 ---
@@ -392,7 +391,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Sample-Manager.py
+python3 -u ./PyP6-Roland-P6-Files-Manager.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -442,7 +441,7 @@ and similar - are skipped silently; that is normal.
 
 ### 5.2 Loading a sample onto a pad
 
-![Sample import](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6Load.png)
+![Sample import](PyP6Load.png)
 
 Click "Load" on any pad for a file browser with folder navigation, sortable
 columns (Name / Length / Size), waveform preview and audition playback.
@@ -506,7 +505,7 @@ following pads in order. Requires `tkinterdnd2`.
 
 ### 5.6 The all-banks view
 
-![All banks view](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6MultiBank.png)
+![All banks view](PyP6MultiBank.png)
 
 The view dropdown in the top bar switches between **Single bank** and **All
 banks**. The all-banks grid shows every bank as a row of 6 compact pads -
@@ -645,7 +644,7 @@ readable, and say plainly what is missing.
 
 ### 5.11 Chop - building a multi-sample from several files
 
-![Sample chop slice tool](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6Chop.png)
+![Sample chop slice tool](PyP6Chop.png)
 
 Click "Chop" on any pad to combine several short samples into one WAV ready
 for the P-6's built-in **Chop** function in Sample Edit (Voice) mode.
@@ -697,7 +696,7 @@ while you work.
 
 ### 5.12 Wavetable synthesizer
 
-![Wavetable synthesizer](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/Pyp6Synth.png)
+![Wavetable synthesizer](Pyp6Synth.png)
 
 The P-6 has no oscillators, but its START knob steps through a sample in 256
 positions. Build the sample so every position lands exactly on one waveform
@@ -744,7 +743,7 @@ the start of the zone you clicked.
 
 ### 5.13 Your own waveforms
 
-![Wavetable synthesizer](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6Draw.png)
+![Wavetable synthesizer](PyP6Draw.png)
 The ✎ button between the two lists opens the **Waveform Creator**.
 
 - **Draw** two shapes, A and B, and the family morphs from one to the other.
@@ -756,7 +755,7 @@ The ✎ button between the two lists opens the **Waveform Creator**.
 - The **orange line** shows what the P-6 will hold, over your blue drawing.
   They differ wherever your line is sharper than a segment can carry.
   
-![Wavetable synthesizer](https://github.com/j0kerpack/Roland-P6-sample-manager/blob/main/PyP6PyP6ImportSingleCycle.png)
+![Wavetable synthesizer](PyP6ImportSingleCycle.png)
 **Import single cycles** with the folder button. The browser on the left
 lists the files; what you send across builds up in the **Cycle Order** list
 on the right, and the import button counts it (**Import 12**). Files holding
@@ -813,9 +812,8 @@ the Length unit stays available.
 - **Defaults** - how Autoplay starts out in the preview windows, default
   Chop slice count, storage warning threshold in MB, and UI scale
 - **Temporary Files** - current size and "Clear Now"
-- **About** - version, author, and the exact state of every optional
+- **About** - version, license, and the exact state of every optional
   component, with "Copy Info" for bug reports
-- **Donate** - the Ko-fi link, in a window you can copy it from
 
 ---
 
@@ -907,7 +905,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Sample-Manager.py -y -w --onefile ^
+python -m PyInstaller PyP6-Roland-P6-Files-Manager.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
@@ -941,6 +939,8 @@ Notes:
 
 ## 8. Credits
 
+- Thanks to the original [PyP6](https://github.com/j0kerpack/Roland-P6-sample-manager)
+  project, which this one is built on.
 - Chop/multi-sample concept inspired by
   [p6-wave-slice](https://github.com/warreneblackwell/p6-wave-slice) by
   **Warren Blackwell**, a command-line utility that batch-processes WAV
@@ -948,11 +948,12 @@ Notes:
 
 ---
 
-## 9. Support
+## 9. License
 
-PyP6 is free and stays free. If it saved you some time:
-[ko-fi.com/j0kerpack](https://ko-fi.com/j0kerpack) - also reachable from
-**Settings → Donate**.
+See [LICENSE](LICENSE). This project is a modified version of the original
+PyP6, which was published without a license; the parts that come from it
+remain its author's. The libraries and tools the downloads bundle keep their
+own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 

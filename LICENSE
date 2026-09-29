@@ -1,0 +1,55 @@
+PyP6 - Roland P-6 Files Manager
+https://github.com/HomoHabilis/Roland-P6-files-manager
+
+Copyright (c) 2026 HomoHabilis. All rights reserved.
+
+This project is a modified version (a derivative work) of the original PyP6,
+https://github.com/j0kerpack/Roland-P6-sample-manager
+Copyright (c) 2026 Brian Siemund.
+
+
+1. The original work
+
+   The original PyP6 was published without a license. Its author keeps all
+   rights to it and to the parts of this project that come from it. Nothing
+   in this file grants any right to those parts on the original author's
+   behalf.
+
+
+2. Modifications and additions
+
+   Everything changed or added in this repository since it was forked from
+   the original - including the Android app in android/ and the build and
+   release workflows - is Copyright (c) 2026 HomoHabilis, all rights
+   reserved.
+
+   To the extent HomoHabilis holds the rights, anyone may download, build
+   and run this software, and read and modify its source, for their own
+   personal, non-commercial use.
+
+   Any other use - redistributing it, selling it, or including it in other
+   software or products - needs written permission from HomoHabilis, and,
+   for the parts that come from the original work, from its author.
+
+
+3. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+   FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+   DEALINGS IN THE SOFTWARE. It writes to the storage of a Roland P-6; keep
+   backups of anything on the device you care about.
+
+
+4. Third-party components
+
+   The libraries and programs the downloads bundle (ffmpeg, Python and its
+   packages, AndroidX and Kotlin libraries, ...) are not covered by this
+   file. Each keeps its own license; see THIRD_PARTY_NOTICES.md.
+
+
+Roland, AIRA and P-6 are trademarks of Roland Corporation. This project is
+independent and not affiliated with, endorsed by or supported by Roland.
