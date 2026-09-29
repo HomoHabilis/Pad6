@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +59,9 @@ fun FamilyGrid(
     val scheme = MaterialTheme.colorScheme
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         zones.withIndex().chunked(columns).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Every cell as tall as the tallest in its row: a name that wraps
+            // (Vowel Formant) must not leave its neighbours shorter.
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 row.forEach { (i, z) ->
                     val (a, b, name) = z
                     // Alternating shades, as the desktop strip does, so
@@ -68,7 +73,7 @@ fun FamilyGrid(
                         else -> null
                     }
                     Column(
-                        Modifier.weight(1f).heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp)).background(bg)
+                        Modifier.weight(1f).fillMaxHeight().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp)).background(bg)
                             .let { if (border != null) it.border(border, RoundedCornerShape(8.dp)) else it }
                             .let { if (onTap != null) it.clickable { onTap(name) } else it }
                             .semantics { contentDescription = "$name, START $a to $b" }
