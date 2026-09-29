@@ -245,10 +245,12 @@ object PatternRender {
             val region = regionFor(note, transpose) ?: return null
             val speed = region.speed
             if (speed <= 0) return null
-            val natural = region.size / speed
+            val natural = region.size / speed / SR     // seconds the region plays once
             val rel = if (gate || loop) release else 0.0
+            // LOOP on a chopped pad loops the slice the note plays, like the
+            // device: it keeps repeating through the release.
             var length = when {
-                loop && chop <= 1 -> gateS + rel
+                loop -> gateS + rel
                 gate -> min(natural, gateS + rel)
                 else -> natural
             }
@@ -261,7 +263,7 @@ object PatternRender {
             val gr = (gain * pan.second * sqrt(2.0)).toFloat()
             val outL = FloatArray(frames)
             val outR = FloatArray(frames)
-            val loops = loop && chop <= 1 && natural < length
+            val loops = loop && natural < length
             val head = region.size - region.loopLen
             for (i in 0 until frames) {
                 var pos = i * speed

@@ -28497,9 +28497,11 @@ class PadVoice:
         if speed <= 0:
             return None
         sr = PREVIEW_SR
-        natural = size / speed
+        natural = size / speed / sr         # seconds the region plays once
         release = self.release if (self.gate or self.loop) else 0.0
-        if self.loop and self.chop <= 1:
+        # LOOP on a chopped pad loops the slice the note plays, like
+        # the device: it keeps repeating through the release.
+        if self.loop:
             length = gate_s + release
         elif self.gate:
             length = min(natural, gate_s + release)
@@ -28510,7 +28512,7 @@ class PadVoice:
         if frames < 2:
             return None
         pos = np.arange(frames, dtype=np.float64) * speed
-        if self.loop and self.chop <= 1 and natural < length:
+        if self.loop and natural < length:
             head = size - loop_len
             over = pos >= size
             rel = pos[over] - size

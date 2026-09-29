@@ -194,6 +194,27 @@ class CoreTest {
     }
 
     @Test
+    fun patternPreviewLoopsTheSliceOfAChoppedLoopingPad() {
+        // A 16-slice pad with LOOP on, held briefly with a long release: the
+        // P-6 keeps repeating the slice while the release fades it.
+        val tone = sine(22050, 4.0)
+        val prm = mapOf("LOOP" to 1, "GATE" to 1, "CHOP" to 16, "TENV_SUSTAIN" to 69, "TENV_RELEASE" to 252)
+        val slice = 4.0 / 16
+        fun peakAfter(v: PatternRender.PadVoice, at: Double): Float {
+            val (l, _) = v.render(60, 100, 0.15, 1.7) ?: return 0f
+            return l.drop((at * 44100).toInt()).maxOfOrNull { abs(it) } ?: 0f
+        }
+        val looping = PatternRender.PadVoice(tone.channels[0], tone.channels[0], 22050.0, prm)
+        assertTrue(peakAfter(looping, slice * 4) > 0.1f)
+        // LOOP off: the slice plays once.
+        val once = PatternRender.PadVoice(tone.channels[0], tone.channels[0], 22050.0, prm + ("LOOP" to 0))
+        assertEquals(0f, peakAfter(once, slice + 0.01))
+        // No .PRM: the whole sample once, not held until the next note.
+        val plain = PatternRender.PadVoice(tone.channels[0], tone.channels[0], 22050.0, null)
+        assertEquals(4.0, plain.render(60, 100, 0.15, 20.0)!!.first.size / 44100.0, 0.01)
+    }
+
+    @Test
     fun presetsRoundTripIncludingWavetablesAndPatterns() {
         val store = SampleStore(tmp.newFolder("s"))
         val a = store.write(sine(44100, 0.2), "Kick.wav", "imp")
