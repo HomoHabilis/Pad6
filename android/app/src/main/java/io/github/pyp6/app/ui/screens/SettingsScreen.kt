@@ -119,10 +119,10 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                 MutedText("Roland AIRA P-6 files manager. Chop is inspired by p6-wave-slice by Warren Blackwell. Not affiliated with Roland.")
                 MutedText("Thanks to the original PyP6 project, which this one is built on.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HomoHabilis/Roland-P6-files-manager"))) }) { Text("Project page") }
+                    TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HomoHabilis/Pad6"))) }) { Text("Project page") }
                     TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/j0kerpack/Roland-P6-sample-manager"))) }) { Text("Original project") }
                 }
-                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HomoHabilis/Roland-P6-files-manager/blob/main/LICENSE"))) }) {
+                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HomoHabilis/Pad6/blob/main/LICENSE"))) }) {
                     Text("License and third-party notices")
                 }
             }

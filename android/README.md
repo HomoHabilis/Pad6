@@ -21,7 +21,7 @@ from their GitHub releases and updates them when a new release comes out.
    [releases](https://github.com/ImranR98/Obtainium/releases), F-Droid or
    IzzyOnDroid).
 2. In Obtainium, tap **Add App** and paste
-   `https://github.com/HomoHabilis/Roland-P6-files-manager`, then **Add**.
+   `https://github.com/HomoHabilis/Pad6`, then **Add**.
    It finds the APK among the release downloads by itself.
 3. Tap **Install**. Android asks once to allow installs from Obtainium.
 
@@ -33,7 +33,7 @@ app's settings in Obtainium.
 
 1. Get the APK:
    - from a release on the
-     [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases)
+     [Releases page](https://github.com/HomoHabilis/Pad6/releases)
      (`Pad6-vX.Y.Z-android.apk`), or
    - from the latest **Android** workflow run on the Actions tab (artifact
      `android`, a zip holding the APK).
