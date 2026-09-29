@@ -2,7 +2,7 @@
 
 ![Pad6 main window](Pad6main.png)
 
-[![Latest release](https://img.shields.io/github/v/release/HomoHabilis/Roland-P6-files-manager)](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
+[![Latest release](https://img.shields.io/github/v/release/HomoHabilis/Pad6)](https://github.com/HomoHabilis/Pad6/releases/latest)
 
 ## Overview
 
@@ -18,7 +18,7 @@ pad into 255 waveforms you step through with the START knob.
 
 > **Ready-made downloads** for **Windows x64, macOS (Apple Silicon and
 > Intel) and Linux x64** are on the
-> [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest),
+> [Releases page](https://github.com/HomoHabilis/Pad6/releases/latest),
 > each bundling **all dependencies, including ffmpeg/ffprobe**. No Python
 > installation, pip packages, or separate ffmpeg setup are required - just
 > download and run. See Section 2.1.
@@ -281,7 +281,7 @@ than 8.6.15 the Synth dialog can come up with its family lists unpainted;
 ### 2.1 Option A: Prebuilt download (recommended, no setup)
 
 Every release on the
-[Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
+[Releases page](https://github.com/HomoHabilis/Pad6/releases/latest)
 has one download per platform, built automatically by GitHub Actions
 (see Section 7) with **every dependency bundled inside**, including Python
 itself, pydub, sounddevice/soundfile, and **ffmpeg / ffprobe**:

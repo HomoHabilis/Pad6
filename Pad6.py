@@ -618,7 +618,7 @@ APP_SUBTITLE = "Files manager for the Roland AIRA P-6"
 # release build replaces this line with the tag it was built from (v5.2.1
 # -> "5.2.1"), so the source never needs a commit to bump it.
 APP_VERSION = None
-APP_URL = "https://github.com/HomoHabilis/Roland-P6-files-manager"
+APP_URL = "https://github.com/HomoHabilis/Pad6"
 # The project this one grew out of, thanked in About and the README.
 ORIGINAL_PROJECT_URL = "https://github.com/j0kerpack/Roland-P6-sample-manager"
 # The window title and the About box both read these, so they always agree.
