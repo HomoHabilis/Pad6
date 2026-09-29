@@ -5943,6 +5943,20 @@ def is_sidecar_file(name):
     return base.startswith("._")
 
 
+def device_pad_files(pad_path):
+    """Names of the files in a pad folder of the P-6's IMPORT that go when
+    the pad is cleared: the sample, its .PRM (left alone it would stay on
+    the device with no sample) and macOS "._" leftovers. [] when the
+    folder is missing."""
+    try:
+        names = os.listdir(pad_path)
+    except OSError:
+        return []
+    return [f for f in names
+            if os.path.isfile(os.path.join(pad_path, f))
+            and (f.lower().endswith((".wav", ".mp3", ".prm")) or is_sidecar_file(f))]
+
+
 def convert_to_wav_if_needed(path):
     if path.lower().endswith(".wav"):
         return path, False
@@ -27027,17 +27041,11 @@ class SampleSlot:
             pad_path = os.path.join(self.app.import_root, f"BANK_{bank}", f"PAD_{self.pad_num}")
             deleted_any = False
             if os.path.isdir(pad_path):
-                try:
-                    files_in_pad = [f for f in os.listdir(pad_path)
-                                     if f.lower().endswith((".wav", ".mp3"))
-                                     and not is_sidecar_file(f)]
-                except Exception as e:
-                    files_in_pad = []
-                    print(f"Could not read pad folder ({pad_path}): {e}")
+                files_in_pad = device_pad_files(pad_path)
                 if files_in_pad:
-                    file_list_str = ", ".join(files_in_pad)
-                    msg_line1 = "The IMPORT folder for Bank " + bank + ", PAD_" + str(self.pad_num) + " already contains a file (" + file_list_str + ")."
-                    msg_line2 = "Should this file also be permanently deleted?"
+                    file_list_str = ", ".join(f for f in files_in_pad if not is_sidecar_file(f))
+                    msg_line1 = "The IMPORT folder for Bank " + bank + ", PAD_" + str(self.pad_num) + " already contains " + file_list_str + "."
+                    msg_line2 = "Should it also be permanently deleted from the P-6?"
                     full_msg = msg_line1 + chr(10) + chr(10) + msg_line2
                     answer = dark_askyesno("Delete Sample on Device?", full_msg)
                     if answer:
@@ -32932,21 +32940,16 @@ class P6ManagerApp:
                 continue
             for pad in PADS:
                 pad_path = os.path.join(bank_path, f"PAD_{pad}")
-                if os.path.isdir(pad_path):
-                    try:
-                        for fname in os.listdir(pad_path):
-                            if (fname.lower().endswith((".wav", ".mp3"))
-                                        and not is_sidecar_file(fname)):
-                                files_found.append(f"BANK_{bank}/PAD_{pad}/{fname}")
-                    except Exception as e:
-                        print(f"Could not read {pad_path}: {e}")
+                for fname in device_pad_files(pad_path):
+                    files_found.append(f"BANK_{bank}/PAD_{pad}/{fname}")
 
         if not files_found:
             self.show_status("IMPORT folder is empty.", kind="info")
             return
 
         warning_lines = [
-            f"Really delete all {len(files_found)} sample file(s) across every bank from:",
+            f"Really delete all {len(files_found)} file(s) across every bank - the "
+            f"samples and their .PRM settings - from:",
             self.import_root,
             "",
             "This permanently removes them from the device and cannot be undone.",
@@ -32968,19 +32971,12 @@ class P6ManagerApp:
                     continue
                 for pad in PADS:
                     pad_path = os.path.join(bank_path, f"PAD_{pad}")
-                    if os.path.isdir(pad_path):
+                    for fname in device_pad_files(pad_path):
                         try:
-                            for fname in os.listdir(pad_path):
-                                if (fname.lower().endswith((".wav", ".mp3"))
-                                        and not is_sidecar_file(fname)):
-                                    full_path = os.path.join(pad_path, fname)
-                                    try:
-                                        os.remove(full_path)
-                                        deleted_count += 1
-                                    except Exception as e:
-                                        errors.append(f"BANK_{bank}/{fname}: {e}")
+                            os.remove(os.path.join(pad_path, fname))
+                            deleted_count += 1
                         except Exception as e:
-                            errors.append(f"BANK_{bank}/PAD_{pad}: {e}")
+                            errors.append(f"BANK_{bank}/PAD_{pad}/{fname}: {e}")
         finally:
             self._set_busy(False)
 

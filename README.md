@@ -617,7 +617,8 @@ file from the device.
 - **Clear Bank** empties the pads of the chosen banks **in the app only** -
   nothing on disk or on the device is touched. Undoable.
 - **Wipe P6 IMPORT Folder** permanently deletes every sample in the device's
-  IMPORT folder across all banks, after a confirmation listing what will go.
+  IMPORT folder across all banks, together with its `.PRM` settings file,
+  after a confirmation listing what will go.
   Your pads stay as they are. This cannot be undone.
 
 ### 5.10 Presets

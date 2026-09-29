@@ -213,7 +213,7 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                     if (files.isNotEmpty()) {
                         Spacer(Modifier.height(8.dp))
                         Text("The P-6 already holds ${files.joinToString(", ")} for this pad.")
-                        CheckRow("Also delete it from the P-6", alsoDevice, { alsoDevice = it })
+                        CheckRow("Also delete from the P-6", alsoDevice, { alsoDevice = it })
                     }
                 }
             },
