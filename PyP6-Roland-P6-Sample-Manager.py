@@ -536,26 +536,37 @@ def _swallowed(exc, where):
 def _version_from_git():
     """Version of a copy run straight from a git checkout.
 
-    Asks git for the nearest release tag: "5.2.1" on the tagged commit,
-    "5.2.1-3-gabc1234" three commits after it, with "-dirty" appended when
-    there are uncommitted changes. "dev" when that can't be found out - no
-    git, a download of the source without history, or a build made by hand
-    rather than by the release workflow."""
+    Named after the highest release tag in the checkout's history: "5.2.1"
+    on the tagged commit, "5.2.1-3-gabc1234" three commits after it, with
+    "-dirty" appended when there are uncommitted changes (the release
+    workflow names its builds the same way). Not plain git describe: with
+    two tags on one commit it may name the older. "dev" when that can't be
+    found out - no git, a download of the source without history, or a
+    build made by hand rather than by the release workflow."""
     if getattr(sys, "frozen", False):
         return "dev"
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=here, capture_output=True,
+                              text=True, timeout=3)
     try:
-        out = subprocess.run(
-            ["git", "describe", "--tags", "--match", "v[0-9]*", "--dirty"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            capture_output=True, text=True, timeout=3)
+        tags = git("-c", "versionsort.suffix=-", "tag", "--merged", "HEAD",
+                   "--list", "v[0-9]*", "--sort=-v:refname")
+        tag = tags.stdout.split()[0] if tags.returncode == 0 and tags.stdout.split() else ""
+        if not tag:
+            return "dev"
+        version = tag[1:]
+        count = git("rev-list", "--count", f"{tag}..HEAD").stdout.strip()
+        if count.isdigit() and int(count) > 0:
+            sha = git("rev-parse", "--short", "HEAD").stdout.strip()
+            version += f"-{count}-g{sha}"
+        if git("diff", "--quiet", "HEAD").returncode == 1:
+            version += "-dirty"
+        return version
     except (OSError, subprocess.SubprocessError) as _e:
         _swallowed(_e, "_version_from_git")
         return "dev"
-    described = out.stdout.strip()
-    if out.returncode != 0 or not described.startswith("v"):
-        return "dev"
-    return described[1:]
-
 
 if APP_VERSION is None:
     APP_VERSION = _version_from_git()
@@ -28497,9 +28508,11 @@ class PadVoice:
         if speed <= 0:
             return None
         sr = PREVIEW_SR
-        natural = size / speed
+        natural = size / speed / sr         # seconds the region plays once
         release = self.release if (self.gate or self.loop) else 0.0
-        if self.loop and self.chop <= 1:
+        # LOOP on a chopped pad loops the slice the note plays, like
+        # the device: it keeps repeating through the release.
+        if self.loop:
             length = gate_s + release
         elif self.gate:
             length = min(natural, gate_s + release)
@@ -28510,7 +28523,7 @@ class PadVoice:
         if frames < 2:
             return None
         pos = np.arange(frames, dtype=np.float64) * speed
-        if self.loop and self.chop <= 1 and natural < length:
+        if self.loop and natural < length:
             head = size - loop_len
             over = pos >= size
             rel = pos[over] - size
@@ -28618,12 +28631,45 @@ class PadVoice:
         return out * (env * vel)[:, None]
 
 
+def _play_looped_from(data, samplerate, loop_start):
+    """Like sd.play(data, loop=True), except that every repeat starts at
+    `loop_start` instead of at 0, so a lead-in plays once. Goes through
+    sounddevice's own play() bookkeeping, so sd.stop() and sd.get_stream()
+    work as after sd.play(). If that internal API is not there (another
+    sounddevice version), it loops from `loop_start` only."""
+    try:
+        ctx = sd._CallbackContext(loop=True)
+        ctx.frames = ctx.check_data(data, None, None)
+        n = ctx.frames
+        pos = 0
+
+        def callback(outdata, frames, time_info, status):
+            nonlocal pos
+            ctx.status |= status
+            i = 0
+            while i < frames:
+                take = min(frames - i, n - pos)
+                outdata[i:i + take] = ctx.data[pos:pos + take]
+                i += take
+                pos += take
+                if pos >= n:
+                    pos = loop_start
+
+        ctx.start_stream(sd.OutputStream, samplerate, ctx.output_channels,
+                         ctx.output_dtype, callback, False,
+                         prime_output_buffers_using_stream_callback=False)
+    except (AttributeError, TypeError):
+        sd.play(data[loop_start:], samplerate, loop=True)
+
+
 def render_pattern(pattern, voice_for, rng=None):
     """Renders one loop of `pattern`.
 
     `voice_for(bank, pad)` returns the PadVoice for a pad, or None when the
     pad is empty. Returns (buffer (frames, 2) float32, step_seconds,
-    info dict with "missing" pads, "notes" played and "chopped" pads).
+    info dict with "missing" pads, "notes" played, "chopped" pads and
+    "loop_start"). The buffer holds two passes: play it from the start
+    and loop from "loop_start" on.
     """
     rng = rng or random.Random()
     tempo = pattern.tempo if pattern.tempo > 0 else 120.0
@@ -28698,7 +28744,12 @@ def render_pattern(pattern, voice_for, rng=None):
             if i + 1 == len(group):
                 nxt += loop_s
             h["cut"] = max(nxt - h["t"], 0.005) if len(group) > 1 else loop_s
-    buf = np.zeros((total, 2), dtype=np.float32)
+    # Two passes: the first as the pattern starts (nothing rings yet), the
+    # second as it sounds once looping, with the tails of notes that ring
+    # past the end folded back to its start. Playback plays the first once
+    # and loops the second (info["loop_start"]).
+    intro = np.zeros((total, 2), dtype=np.float32)
+    body = np.zeros((total, 2), dtype=np.float32)
     played = 0
     for h in hits:
         n, v = h["note"], h["voice"]
@@ -28711,20 +28762,23 @@ def render_pattern(pattern, voice_for, rng=None):
             continue
         played += 1
         at = int(round(h["t"] * PREVIEW_SR)) % total
-        # Folded into the loop: a tail past the end rings on at the start.
+        first = min(total - at, len(audio))
+        intro[at:at + first] += audio[:first]
         pos = 0
         while pos < len(audio):
             room = min(total - at, len(audio) - pos)
-            buf[at:at + room] += audio[pos:pos + room]
+            body[at:at + room] += audio[pos:pos + room]
             pos += room
             at = 0
+    buf = np.concatenate([intro, body])
 
     level = _int_or(pattern.value("LEVEL"), 100)
     buf *= 0.5 * (max(level, 0) / 100.0 if level else 1.0)
     peak = float(np.max(np.abs(buf))) if buf.size else 0.0
     if peak > 0.95:
         buf *= 0.95 / peak
-    return buf, step_s, {"missing": missing, "notes": played, "chopped": chopped}
+    return buf, step_s, {"missing": missing, "notes": played, "chopped": chopped,
+                         "loop_start": total}
 
 
 def load_pad_voice(state, force_mono=False):
@@ -32199,7 +32253,7 @@ class P6ManagerApp:
         self.stop_pattern_preview(stop_audio=False)
         self.stop_playback_waveform()
         try:
-            sd.play(buf, PREVIEW_SR, loop=True)
+            _play_looped_from(buf, PREVIEW_SR, info["loop_start"])
             stream = sd.get_stream()
         except Exception as e:
             dark_showerror("Playback Error", str(e))

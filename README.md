@@ -861,8 +861,9 @@ Releases are built by the GitHub Actions workflow in
 number, so a release needs no "bump" commit: the script says
 `APP_VERSION = None`, and the build writes the tag into the copy it freezes
 (`v4.2.4` → `4.2.4` in the title bar and in Settings → About). Run from a git
-checkout, the script asks `git describe` instead and shows e.g.
-`4.2.4-3-gabc1234` - three commits after v4.2.4.
+checkout, the script asks git for the highest release tag in its history
+instead and shows e.g. `4.2.4-3-gabc1234` - three commits after v4.2.4.
+Workflow builds that are not releases are named the same way.
 
 To publish a release, write what changed into a file (Markdown is fine) and
 tag with it as the tag's message:

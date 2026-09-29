@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only what is visible before Compose draws its first frame: the window
+         background matches the default dark palette, so start-up does not
+         flash white. Everything else is themed in Compose. -->
+    <style name="Theme.PyP6" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <color name="window_background">#1E1E24</color>
+    <color name="ic_launcher_background">#1E1E24</color>
+</resources>
