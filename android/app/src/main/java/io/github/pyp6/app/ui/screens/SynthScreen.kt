@@ -74,8 +74,8 @@ import io.github.pyp6.app.ui.Routes
 import io.github.pyp6.app.ui.components.MutedText
 import io.github.pyp6.app.ui.components.ScreenScaffold
 import io.github.pyp6.app.ui.components.Section
-import io.github.pyp6.app.ui.components.ShapeView
-import io.github.pyp6.app.ui.components.ZoneStrip
+import io.github.pyp6.app.ui.components.MorphView
+import io.github.pyp6.app.ui.components.FamilyGrid
 import io.github.pyp6.core.model.PadRef
 import io.github.pyp6.core.wavetable.WaveEntry
 import io.github.pyp6.core.wavetable.Wavetable
@@ -114,23 +114,19 @@ fun SynthScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
             else StepOrder(sy, vm, u, library, onAdd = { adding = true }, onDraw = { nav.to(Routes.DRAW) },
                 onImport = { cyclePicker.launch(arrayOf("audio/*")) })
 
-            u.morph?.let { (name, shapes) ->
-                Section("Shape: $name") {
-                    ShapeView(shapes, Modifier.fillMaxWidth().height(110.dp), highlightLast = true)
-                    MutedText(if (shapes.size > 1) "The morph from its first to its last waveform (brightest)." else "One waveform per START step.")
-                }
-            }
-
             PitchSection(sy, u)
 
+            val morph = u.morph
+            val familyPlaying = morph?.takeIf { playback?.id == sy.familyId(it.name) }
             Section("Table") {
                 val counts = Wavetable.splitSteps(names.size)
                 var start = 0
                 val zones = names.zip(counts).map { (n, cnt) -> Triple(start, start + cnt - 1, n).also { start += cnt } }
-                ZoneStrip(zones, Modifier.fillMaxWidth().height(30.dp))
+                FamilyGrid(zones, Modifier.fillMaxWidth(), selected = morph?.name, playing = familyPlaying?.name,
+                    onTap = { sy.previewFamily(it, vm) })
                 MutedText("${names.size} famil${if (names.size == 1) "y" else "ies"}, " +
                     (if (counts.isEmpty()) "-" else if (counts.toSet().size == 1) "${counts[0]}" else "${counts.min()}-${counts.max()}") +
-                    " steps each. On the P-6: set SIZE to 1, then turn START.")
+                    " steps each, on START from 0 to 254. Tap a family to see and hear its morph. On the P-6: set SIZE to 1, then turn START.")
                 val tablePlaying = playback?.id == sy.tableId
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { sy.previewTable(vm) }, enabled = names.isNotEmpty(), modifier = Modifier.weight(1f)) {
@@ -142,6 +138,14 @@ fun SynthScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                     }
                 }
             }
+
+            Section("Morph", trailing = {
+                morph?.let { Text("${it.name} \u00b7 ${it.steps} steps", style = MaterialTheme.typography.labelLarge) }
+            }) {
+                MorphView(morph?.shapes ?: emptyList(), Modifier.fillMaxWidth().height(150.dp),
+                    highlight = familyPlaying?.let { playback?.position }, placeholder = "Tap a family to see its morph")
+            }
+
             Spacer(Modifier.height(16.dp))
         }
     }
