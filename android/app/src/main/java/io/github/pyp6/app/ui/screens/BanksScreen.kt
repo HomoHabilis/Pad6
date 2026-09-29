@@ -24,6 +24,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
@@ -156,7 +159,12 @@ fun BanksScreen(vm: MainViewModel, nav: Nav) {
             items(P6.PADS, key = { "$bank$it" }) { pad ->
                 val ref = PadRef(bank, pad)
                 val st = bankState.pad(pad)
-                if (st == null) EmptyPadCard(pad) { loadTarget = pad; picker.launch(arrayOf("audio/*")) }
+                if (st == null) EmptyPadCard(
+                    pad,
+                    onLoad = { loadTarget = pad; picker.launch(arrayOf("audio/*")) },
+                    onChop = { nav.to(Routes.chop(ref)) },
+                    onSynth = { nav.to(Routes.synth(ref)) },
+                )
                 else PadCard(
                     ref, st, bankState.forceMono,
                     playFraction = playback?.takeIf { it.id == vm.padPlaybackId(ref) }?.position,
@@ -239,19 +247,28 @@ private fun WarningsCard(lines: List<String>) {
     }
 }
 
+/** An empty pad: load a file, or build a multisample (Chop) or a wavetable (Synth) into it. */
 @Composable
-private fun EmptyPadCard(pad: Int, onLoad: () -> Unit) {
+private fun EmptyPadCard(pad: Int, onLoad: () -> Unit, onChop: () -> Unit, onSynth: () -> Unit) {
     OutlinedCard(
         onClick = onLoad,
-        modifier = Modifier.fillMaxWidth().height(148.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 148.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(Modifier.fillMaxSize().padding(10.dp)) {
+        Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 4.dp)) {
             Text("PAD $pad", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
-                    Text("Load sample", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
+                Text("Load sample", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            Row(Modifier.fillMaxWidth()) {
+                TextButton(onClick = onChop, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) {
+                    Icon(Icons.Default.ContentCut, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
+                    Text("Chop", maxLines = 1)
+                }
+                TextButton(onClick = onSynth, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) {
+                    Icon(Icons.Default.Waves, null, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
+                    Text("Synth", maxLines = 1)
                 }
             }
         }

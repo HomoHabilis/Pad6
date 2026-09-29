@@ -50,7 +50,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -60,7 +59,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -240,10 +238,18 @@ private fun PatternGrid(
     vm: MainViewModel, pats: Map<PatternSlot, P6Pattern>, bank: Int, onBank: (Int) -> Unit,
     selected: PatternSlot?, linked: Set<PatternSlot>, playing: PatternSlot?, project: Project,
 ) {
-    val tiles = remember { mutableStateMapOf<PatternSlot, Rect>() }
+    // The 16 tiles by grid position, not by slot: switching the pattern bank
+    // puts other slots at the same places without moving (or re-reporting)
+    // the tiles, so a map by slot would keep hitting the previous bank's.
+    // Bounds are read live at hit-test time.
+    val tiles = remember { HashMap<Int, LayoutCoordinates>() }
+    val currentBank by rememberUpdatedState(bank)
     var dragFrom by remember { mutableStateOf<PatternSlot?>(null) }
     var dragPos by remember { mutableStateOf(Offset.Zero) }
-    val target = dragFrom?.let { f -> tiles.entries.firstOrNull { it.value.contains(dragPos) }?.key?.takeIf { it != f } }
+    fun slotAt(pos: Offset): PatternSlot? = tiles.entries
+        .firstOrNull { (_, c) -> c.isAttached && c.boundsInRoot().contains(pos) }
+        ?.let { PatternSlot(currentBank, it.key + 1) }
+    val target = dragFrom?.let { f -> slotAt(dragPos)?.takeIf { it != f } }
     Section("Pattern bank") {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             (1..PatternSlot.BANKS).forEach { b ->
@@ -256,19 +262,20 @@ private fun PatternGrid(
         for (row in 0 until 4) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 for (col in 0 until 4) {
-                    val slot = PatternSlot(bank, row * 4 + col + 1)
+                    val index = row * 4 + col
+                    val slot = PatternSlot(bank, index + 1)
                     PatternTile(
                         slot, pats[slot], Modifier.weight(1f),
                         selected = slot == selected, linked = slot in linked, playing = slot == playing,
                         target = slot == target, source = slot == dragFrom,
                         onTap = { vm.selectPattern(slot) },
                         onDouble = { vm.selectPattern(slot); if (pats[slot] != null) vm.togglePatternPreview(slot) },
-                        onPlaced = { tiles[slot] = it },
-                        onDragStart = { dragFrom = slot; dragPos = it },
+                        onPlaced = { tiles[index] = it },
+                        onDragStart = { dragFrom = PatternSlot(currentBank, index + 1); dragPos = it },
                         onDrag = { dragPos = it },
                         onDragEnd = {
                             val f = dragFrom
-                            val t = tiles.entries.firstOrNull { it.value.contains(dragPos) }?.key
+                            val t = slotAt(dragPos)
                             if (f != null && t != null && t != f) vm.swapPatterns(f, t)
                             dragFrom = null
                         },
@@ -285,7 +292,7 @@ private fun PatternGrid(
 private fun PatternTile(
     slot: PatternSlot, pat: P6Pattern?, modifier: Modifier,
     selected: Boolean, linked: Boolean, playing: Boolean, target: Boolean, source: Boolean,
-    onTap: () -> Unit, onDouble: () -> Unit, onPlaced: (Rect) -> Unit,
+    onTap: () -> Unit, onDouble: () -> Unit, onPlaced: (LayoutCoordinates) -> Unit,
     onDragStart: (Offset) -> Unit, onDrag: (Offset) -> Unit, onDragEnd: () -> Unit,
 ) {
     val pc = LocalPyP6Colors.current
@@ -310,7 +317,7 @@ private fun PatternTile(
     }
     Box(
         modifier.heightIn(min = 60.dp)
-            .onGloballyPositioned { coords = it; onPlaced(it.boundsInRoot()) }
+            .onGloballyPositioned { coords = it; onPlaced(it) }
             .clip(RoundedCornerShape(8.dp))
             .background(bg)
             .pointerInput(slot) { detectTapGestures(onTap = { tap() }, onDoubleTap = { dbl() }) }

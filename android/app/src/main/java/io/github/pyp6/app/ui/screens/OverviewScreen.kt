@@ -30,7 +30,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -39,7 +38,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -87,14 +85,18 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
     val canUndo by vm.canUndo.collectAsStateWithLifecycle()
     val canRedo by vm.canRedo.collectAsStateWithLifecycle()
     val focus by vm.focusPad.collectAsStateWithLifecycle()
-    val cells = remember { mutableStateMapOf<PadRef, Rect>() }
-    val rows = remember { mutableStateMapOf<Char, Rect>() }
+    // Live coordinates, read when hit-testing: cached rectangles go stale
+    // when the list scrolls or a cell's content changes without moving it.
+    val cells = remember { HashMap<PadRef, LayoutCoordinates>() }
+    val rows = remember { HashMap<Char, LayoutCoordinates>() }
     var drag by remember { mutableStateOf<Drag?>(null) }
     var dragPos by remember { mutableStateOf(Offset.Zero) }
     var rootOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val padTarget = (drag as? Drag.PadDrag)?.let { d -> cells.entries.firstOrNull { it.value.contains(dragPos) }?.key?.takeIf { it != d.from } }
-    val bankTarget = (drag as? Drag.BankDrag)?.let { d -> rows.entries.firstOrNull { it.value.contains(dragPos) }?.key?.takeIf { it != d.from } }
+    fun <K> Map<K, LayoutCoordinates>.at(pos: Offset): K? =
+        entries.firstOrNull { (_, c) -> c.isAttached && c.boundsInRoot().contains(pos) }?.key
+    val padTarget = (drag as? Drag.PadDrag)?.let { d -> cells.at(dragPos)?.takeIf { it != d.from } }
+    val bankTarget = (drag as? Drag.BankDrag)?.let { d -> rows.at(dragPos)?.takeIf { it != d.from } }
 
     ScreenScaffold(
         title = "All banks",
@@ -123,10 +125,10 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
                         onDrag = { dragPos = it },
                         onDragEnd = {
                             when (val d = drag) {
-                                is Drag.PadDrag -> cells.entries.firstOrNull { it.value.contains(dragPos) }?.key?.let { t ->
+                                is Drag.PadDrag -> cells.at(dragPos)?.let { t ->
                                     if (t != d.from) vm.swapPads(d.from, t)
                                 }
-                                is Drag.BankDrag -> rows.entries.firstOrNull { it.value.contains(dragPos) }?.key?.let { t ->
+                                is Drag.BankDrag -> rows.at(dragPos)?.let { t ->
                                     if (t != d.from) vm.swapBanks(d.from, t)
                                 }
                                 null -> {}
@@ -162,7 +164,7 @@ private fun BankRow(
     bank: Char, project: Project, playingId: String?, focus: PadRef?,
     isBankTarget: Boolean, isBankSource: Boolean, padTarget: PadRef?, padSource: PadRef?,
     vm: MainViewModel, onOpen: (PadRef) -> Unit,
-    onCell: (PadRef, Rect) -> Unit, onRow: (Rect) -> Unit,
+    onCell: (PadRef, LayoutCoordinates) -> Unit, onRow: (LayoutCoordinates) -> Unit,
     onDragStart: (Drag, Offset) -> Unit, onDrag: (Offset) -> Unit, onDragEnd: () -> Unit,
 ) {
     val pc = LocalPyP6Colors.current
@@ -173,7 +175,7 @@ private fun BankRow(
     val end by rememberUpdatedState(onDragEnd)
     Row(
         Modifier.fillMaxWidth().height(62.dp)
-            .onGloballyPositioned { rowCoords = it; onRow(it.boundsInRoot()) }
+            .onGloballyPositioned { rowCoords = it; onRow(it) }
             .border(if (isBankTarget) BorderStroke(2.dp, pc.warn) else BorderStroke(0.dp, Color.Transparent), RoundedCornerShape(8.dp)),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -217,7 +219,7 @@ private fun BankRow(
 private fun Cell(
     ref: PadRef, project: Project, modifier: Modifier,
     playing: Boolean, focused: Boolean, target: Boolean, source: Boolean,
-    onTap: () -> Unit, onDouble: () -> Unit, onPlaced: (Rect) -> Unit,
+    onTap: () -> Unit, onDouble: () -> Unit, onPlaced: (LayoutCoordinates) -> Unit,
     onDragStart: (Offset) -> Unit, onDrag: (Offset) -> Unit, onDragEnd: () -> Unit,
 ) {
     val pc = LocalPyP6Colors.current
@@ -239,7 +241,7 @@ private fun Cell(
     }
     Box(
         modifier
-            .onGloballyPositioned { coords = it; onPlaced(it.boundsInRoot()) }
+            .onGloballyPositioned { coords = it; onPlaced(it) }
             .clip(RoundedCornerShape(6.dp))
             .background(if (source) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surfaceContainer)
             .border(border, RoundedCornerShape(6.dp))
