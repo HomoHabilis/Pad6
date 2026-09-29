@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.pyp6.app.ui.MainViewModel
 import io.github.pyp6.app.ui.Nav
 import io.github.pyp6.app.ui.Routes
+import io.github.pyp6.app.ui.components.WavetableLabel
 import io.github.pyp6.app.ui.components.MiniWave
 import io.github.pyp6.app.ui.components.MutedText
 import io.github.pyp6.app.ui.components.ScreenScaffold
@@ -260,7 +261,8 @@ private fun Cell(
             Text(if (st == null) "${ref.pad}" else st.name.substringBeforeLast('.').ifEmpty { st.name }, fontSize = 9.sp, lineHeight = 10.sp, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Start,
                 color = if (st == null) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface)
-            if (st != null) MiniWave(summary?.envelope, Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), overFraction = over)
+            if (st != null && st.isWavetable) WavetableLabel(Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), text = "WT")
+            else if (st != null) MiniWave(summary?.envelope, Modifier.fillMaxWidth().weight(1f).padding(top = 2.dp), overFraction = over)
         }
     }
 }

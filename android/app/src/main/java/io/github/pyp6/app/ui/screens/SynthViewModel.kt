@@ -29,11 +29,16 @@ data class SynthUi(
     val selection: List<String> = emptyList(),
     val randomized: List<String> = emptyList(),
     val working: String? = null,
-    /** Shapes shown for the family last tapped: (name, shapes). */
-    val morph: Pair<String, List<DoubleArray>>? = null,
+    /** The family last tapped, with the waveforms its morph steps through and how many steps it gets. */
+    val morph: Morph? = null,
     val lastWarning: String? = null,
 ) {
     val simple: Boolean get() = mode == "Simple"
+}
+
+/** A family's morph as the Morph display shows it: up to [SHOWN] of its [steps] waveforms. */
+data class Morph(val name: String, val shapes: List<DoubleArray>, val steps: Int) {
+    companion object { const val SHOWN = 12 }
 }
 
 /** Cycle files read for import, waiting for the user to pick a mode. */
@@ -53,6 +58,11 @@ class SynthViewModel(app: Application, val ref: PadRef) : AndroidViewModel(app) 
     private var padCustom: Map<String, WaveEntry> = emptyMap()
 
     val tableId = "synth:${ref.label}"
+
+    private companion object {
+        /** The desktop's cap: a morph this smooth sounds the same with 64 steps as with 255. */
+        const val PREVIEW_STEP_CAP = 64
+    }
 
     init {
         val cfg = c.repository.value.pad(ref)?.wavetable?.config
@@ -146,8 +156,14 @@ class SynthViewModel(app: Application, val ref: PadRef) : AndroidViewModel(app) 
         return if (i >= 0) counts[i] else 16
     }
 
-    /** Plays a family's morph sweep at the configured pitch, and shows its shapes. */
+    fun familyId(name: String) = "synth:family:$name"
+
+    /**
+     * Shows a family's morph and plays its sweep at the configured pitch.
+     * Tapping the family that is playing stops it instead.
+     */
     fun previewFamily(name: String, vm: MainViewModel) {
+        if (c.player.isPlaying(familyId(name))) { c.player.stop(); return }
         val lib = vm.library.value
         val it = item(name, lib)
         val (midi, cycles, up) = pitch()
@@ -155,14 +171,15 @@ class SynthViewModel(app: Application, val ref: PadRef) : AndroidViewModel(app) 
             val res = withContext(Dispatchers.Default) {
                 runCatching {
                     val steps = if (isMulti(name, lib)) Wavetable.SEGMENTS else stepsFor(name)
-                    val audio = Wavetable.renderSweep(it, midi, cycles, up, steps)
-                    val shapes = Wavetable.morphShapes(it, midi, cycles, up, if (isMulti(name, lib)) 1 else 8)
-                    audio to shapes
+                    // Rendering and audio cost only; the display says how many steps the table really gets.
+                    val audio = Wavetable.renderSweep(it, midi, cycles, up, minOf(steps, PREVIEW_STEP_CAP))
+                    val shapes = Wavetable.morphShapes(it, midi, cycles, up, steps.coerceIn(2, Morph.SHOWN))
+                    Triple(audio, shapes, steps)
                 }.getOrNull()
             }
             if (res == null) { vm.message("$name cannot be rendered.", true); return@launch }
-            _ui.value = _ui.value.copy(morph = name to res.second)
-            vm.play("synth:family:$name", Audio(Wavetable.SR, listOf(res.first)))
+            _ui.value = _ui.value.copy(morph = Morph(name, res.second, res.third))
+            vm.play(familyId(name), Audio(Wavetable.SR, listOf(res.first)))
         }
     }
 

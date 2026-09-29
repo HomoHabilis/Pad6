@@ -1,12 +1,12 @@
-# PyP6 - Roland P-6 Files Manager
+# Pad6 - files manager for the Roland P-6
 
-![PyP6 main window](PyP6main.png)
+![Pad6 main window](Pad6main.png)
 
 [![Latest release](https://img.shields.io/github/v/release/HomoHabilis/Roland-P6-files-manager)](https://github.com/HomoHabilis/Roland-P6-files-manager/releases/latest)
 
 ## Overview
 
-PyP6 is a free desktop application (Python + Tkinter) for managing WAV/MP3
+Pad6 is a free desktop application (Python + Tkinter) for managing WAV/MP3
 samples across the 8 sample banks (A-H) and 6 pads per bank of the Roland
 AIRA P-6. It handles auditioning before loading, MP3-to-WAV conversion,
 per-pad sample rate / pitch / mono conversion, non-destructive editing
@@ -25,7 +25,9 @@ pad into 255 waveforms you step through with the START knob.
 
 > **On an Android phone:** the same features as a native app, talking to
 > the P-6 over USB the same way. See [android/README.md](android/README.md);
-> the APK is attached to each release.
+> the APK is attached to each release, and
+> [Obtainium](https://github.com/ImranR98/Obtainium) can install it and keep
+> it updated from there.
 
 ---
 
@@ -75,7 +77,7 @@ Silicon and Intel) and Linux x64**, ffmpeg included - see 2.1.
 ### Length and tempo without pitch shift
 
 The P-6 can only shorten a sample by playing it faster, which drags the
-pitch up with it. PyP6 does it properly instead.
+pitch up with it. Pad6 does it properly instead.
 
 - **Type a length, or a tempo.** The pad editor takes a target in seconds,
   or in **BPM** once a tempo has been found in the sample. Enter 140 and a
@@ -228,22 +230,22 @@ pydub:       0.25.1
 ### 1.2 A note on Tcl/Tk 9.0
 
 Python 3.13 and newer can be built against **Tcl/Tk 9.0**, and the
-python.org installers are moving that way. PyP6 runs on both — there is
+python.org installers are moving that way. Pad6 runs on both — there is
 no separate build, and the app calls no raw Tcl — but **several users
 have reported that things behave differently under Tk 9.0**, and a few
 features are known not to work correctly there:
 
 - **Drag & drop does not work under Tcl/Tk 9.** `tkinterdnd2` ships a
   native Tcl extension built against Tcl 8, and `package require tkdnd`
-  fails outright under Tcl 9. This is not a bug PyP6 can work around —
-  the extension itself has no Tcl-9 build yet. PyP6 detects the failure
+  fails outright under Tcl 9. This is not a bug Pad6 can work around —
+  the extension itself has no Tcl-9 build yet. Pad6 detects the failure
   and reports the actual reason in Settings → About instead of claiming
   the package is missing, but **drag & drop stays disabled until
   `tkinterdnd2`/`tkdnd` ships a Tcl-9-compatible build.** If you rely on
-  drag & drop, install PyP6 on a Python built against Tcl/Tk 8.6.
+  drag & drop, install Pad6 on a Python built against Tcl/Tk 8.6.
 - **X11 mouse buttons 4-7 are no longer script-visible** (TIP 474). On
   Linux under Tk 9, raw `<Button-4>`/`<Button-5>` scroll events may not
-  fire the way older Tk versions did. PyP6 binds `<MouseWheel>` alongside
+  fire the way older Tk versions did. Pad6 binds `<MouseWheel>` alongside
   `<Button-4>`/`<Button-5>` everywhere and reads only the sign of
   `event.delta` as a workaround, but users on Tk 9 builds have still
   reported inconsistent scroll behavior in some list views — if
@@ -263,7 +265,7 @@ version you're actually running if something looks off.
 
 **Recommendation:** if you hit missing drag & drop, odd scroll behavior,
 Synth window rendering glitches, or other UI issues, check the startup
-console note first. Installing PyP6 with a python.org interpreter built
+console note first. Installing Pad6 with a python.org interpreter built
 against **Tcl/Tk 8.6** avoids all of the above and is currently the most
 reliable configuration overall.
 
@@ -286,23 +288,23 @@ itself, pydub, sounddevice/soundfile, and **ffmpeg / ffprobe**:
 
 | Download | For |
 |---|---|
-| `PyP6-vX.Y.Z-windows-x64.zip` | Windows 10/11, 64-bit |
-| `PyP6-vX.Y.Z-macos-arm64.zip` | Macs with Apple Silicon (M1 and later) |
-| `PyP6-vX.Y.Z-macos-x64.zip` | Intel Macs |
-| `PyP6-vX.Y.Z-linux-x64.tar.gz` | 64-bit Linux |
+| `Pad6-vX.Y.Z-windows-x64.zip` | Windows 10/11, 64-bit |
+| `Pad6-vX.Y.Z-macos-arm64.zip` | Macs with Apple Silicon (M1 and later) |
+| `Pad6-vX.Y.Z-macos-x64.zip` | Intel Macs |
+| `Pad6-vX.Y.Z-linux-x64.tar.gz` | 64-bit Linux |
 
-**Windows:** unzip and double-click `PyP6.exe`. SmartScreen or your
+**Windows:** unzip and double-click `Pad6.exe`. SmartScreen or your
 antivirus may flag an unsigned executable on first run; choose "Run
 anyway" / allow it if you trust the source.
 
-**macOS:** unzip and move `PyP6.app` to Applications. The app is not
+**macOS:** unzip and move `Pad6.app` to Applications. The app is not
 signed with an Apple developer certificate, so the first launch is blocked:
 right-click the app, choose **Open**, then **Open** again (on macOS 15 and
 later: try to open it once, then allow it under System Settings → Privacy
 & Security → "Open Anyway"). Alternatively, in Terminal:
-`xattr -dr com.apple.quarantine /Applications/PyP6.app`.
+`xattr -dr com.apple.quarantine /Applications/Pad6.app`.
 
-**Linux:** unpack and run `./PyP6`. Audio playback needs the PortAudio
+**Linux:** unpack and run `./Pad6`. Audio playback needs the PortAudio
 library from your distribution (`sudo apt install libportaudio2` on
 Debian/Ubuntu, `sudo dnf install portaudio` on Fedora); everything else is
 inside the file.
@@ -358,7 +360,7 @@ manually. Settings → About shows which binary is actually in use.
 #### 2.2.4 Run the application
 
 ```
-python PyP6-Roland-P6-Files-Manager.py
+python Pad6.py
 ```
 
 ---
@@ -391,7 +393,7 @@ Run the app (the venv must be reactivated in every new terminal session):
 ```bash
 cd ~
 source p6env/bin/activate
-python3 -u ./PyP6-Roland-P6-Files-Manager.py
+python3 -u ./Pad6.py
 ```
 
 > If a feature appears to be missing, check **Settings → About** first - it
@@ -441,7 +443,7 @@ and similar - are skipped silently; that is normal.
 
 ### 5.2 Loading a sample onto a pad
 
-![Sample import](PyP6Load.png)
+![Sample import](Pad6Load.png)
 
 Click "Load" on any pad for a file browser with folder navigation, sortable
 columns (Name / Length / Size), waveform preview and audition playback.
@@ -505,7 +507,7 @@ following pads in order. Requires `tkinterdnd2`.
 
 ### 5.6 The all-banks view
 
-![All banks view](PyP6MultiBank.png)
+![All banks view](Pad6MultiBank.png)
 
 The view dropdown in the top bar switches between **Single bank** and **All
 banks**. The all-banks grid shows every bank as a row of 6 compact pads -
@@ -559,7 +561,7 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
   - **Pad settings** from the `.PRM` are used when it still goes to the
     device with the sample: start and end, loop, gate or one-shot,
     reverse, level, pan, the amp envelope, mono/poly and mute groups. The
-    pad's pitch and mono settings in PyP6 are applied the way export
+    pad's pitch and mono settings in Pad6 are applied the way export
     applies them.
   - **The granular part** plays as a simple grain cloud of its source pad.
   - **Left out:** filters, effects and knob motion. Muted parts and empty
@@ -644,7 +646,7 @@ readable, and say plainly what is missing.
 
 ### 5.11 Chop - building a multi-sample from several files
 
-![Sample chop slice tool](PyP6Chop.png)
+![Sample chop slice tool](Pad6Chop.png)
 
 Click "Chop" on any pad to combine several short samples into one WAV ready
 for the P-6's built-in **Chop** function in Sample Edit (Voice) mode.
@@ -696,7 +698,7 @@ while you work.
 
 ### 5.12 Wavetable synthesizer
 
-![Wavetable synthesizer](Pyp6Synth.png)
+![Wavetable synthesizer](Pad6Synth.png)
 
 The P-6 has no oscillators, but its START knob steps through a sample in 256
 positions. Build the sample so every position lands exactly on one waveform
@@ -726,7 +728,7 @@ a `.PRM` telling the P-6 how to loop them.
 
 **On the P-6**
 
-Transfer the bank, then set **SIZE to 1** (should be set automatically by PyP6) and turn **START**. Positions 0 to
+Transfer the bank, then set **SIZE to 1** (should be set automatically by Pad6) and turn **START**. Positions 0 to
 254 each select one waveform. Position 255 sits past the last one and does
 not produce a usable sound - that is a property of the P-6, not a fault in
 the table.
@@ -743,7 +745,7 @@ the start of the zone you clicked.
 
 ### 5.13 Your own waveforms
 
-![Wavetable synthesizer](PyP6Draw.png)
+![Wavetable synthesizer](Pad6Draw.png)
 The ✎ button between the two lists opens the **Waveform Creator**.
 
 - **Draw** two shapes, A and B, and the family morphs from one to the other.
@@ -755,7 +757,7 @@ The ✎ button between the two lists opens the **Waveform Creator**.
 - The **orange line** shows what the P-6 will hold, over your blue drawing.
   They differ wherever your line is sharper than a segment can carry.
   
-![Wavetable synthesizer](PyP6ImportSingleCycle.png)
+![Wavetable synthesizer](Pad6ImportSingleCycle.png)
 **Import single cycles** with the folder button. The browser on the left
 lists the files; what you send across builds up in the **Cycle Order** list
 on the right, and the import button counts it (**Import 12**). Files holding
@@ -826,7 +828,7 @@ the Length unit stays available.
 | `ModuleNotFoundError: No module named 'audioop'` | Python 3.13+: `pip install audioop-lts`. Not applicable to the prebuilt executable. |
 | A feature is silently missing | **Settings → About** reports what actually loaded, which separates "package missing" from "package present but not working". Installing into the wrong venv is the usual cause. |
 | MP3 preview/conversion fails | ffmpeg not installed or not on PATH; verify with `ffmpeg -version`. |
-| ffmpeg not found when started from Finder (macOS) | Finder does not pass your shell PATH. PyP6 searches the usual install locations itself; if it still fails, set the path in Settings. |
+| ffmpeg not found when started from Finder (macOS) | Finder does not pass your shell PATH. Pad6 searches the usual install locations itself; if it still fails, set the path in Settings. |
 | `[swallowed] _child_dir_ci: PermissionError` in the debug log | Normal. `/media/root` and similar are not readable by you; detection skips them and carries on. Only shown with `PYP6_DEBUG=1`. |
 | Dropping files onto pads never works | **Settings → About**: `tkinterdnd2 not available` → `pip install tkinterdnd2` into the venv you start the app from. Under Tcl/Tk 9.0 it cannot work at all; see 1.2. |
 | A drop is occasionally missed on Linux | Known under Wayland. Drag again, or use "Load". |
@@ -905,7 +907,7 @@ the run's **Artifacts** on the Actions tab, handy for testing a change.
 ```
 pip install pyinstaller
 
-python -m PyInstaller PyP6-Roland-P6-Files-Manager.py -y -w --onefile ^
+python -m PyInstaller Pad6.py -y -w --onefile ^
   --icon=icon.ico ^
   --collect-data tkinterdnd2 ^
   --add-binary "C:\ffmpeg\bin\ffmpeg.exe;." ^
@@ -918,7 +920,7 @@ Notes:
 - A build made this way shows the version as `dev`. To give it a number,
   first change the line `APP_VERSION = None` in the script to e.g.
   `APP_VERSION = "4.2.4"` (do not commit that).
-- The logo is built into the script. Drop a `pyp6logo.png` next to it to use
+- The logo is built into the script. Drop a `pad6logo.png` next to it to use
   your own instead.
 - Use `;` as the `--add-binary` separator on Windows, not `:`.
 - `--collect-data tkinterdnd2` is required for drag & drop in the build: the

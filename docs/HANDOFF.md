@@ -1,4 +1,4 @@
-# PyP6 handoff brief: patterns, P-6 transfer and releases (v4.2.3 → v5.0.0)
+# Pad6 handoff brief: patterns, P-6 transfer and releases (v4.2.3 → v5.0.0)
 
 The work was merged in PR #1 (features) and PR #2 (version bump) and released
 as **v5.0.0**, marked Latest, with all four downloads and the release notes
@@ -70,7 +70,7 @@ Line numbers below are approximate, as of v5.0.0.
   a release. `v5.0.1` is a release; `v5.0.1-rc1` is published as a
   pre-release. (Up to 5.2.1 the version was hard-coded and the script
   renamed each release, e.g. `_5_0_0.py`.)
-- **Script name:** `PyP6-Roland-P6-Files-Manager.py`, no longer renamed.
+- **Script name:** `Pad6.py`, no longer renamed.
 - **Release notes:** the message of an annotated tag
   (`git tag -a vX --cleanup=whitespace -F notes.md`). For a release started
   with Run workflow, `.github/release-notes/<tag>.md` if it exists, else
@@ -91,7 +91,7 @@ Line numbers below are approximate, as of v5.0.0.
 
 | File | What's there |
 |---|---|
-| `PyP6-Roland-P6-Files-Manager.py` (32k lines) | Pattern model at ~L27840–28160: `P6Pattern`, `part_for_pad`, `find_pattern_files`, `_BLANK_PATTERN_XZ` |
+| `Pad6.py` (32k lines) | Pattern model at ~L27840–28160: `P6Pattern`, `part_for_pad`, `find_pattern_files`, `_BLANK_PATTERN_XZ` |
 | same | UI classes: `PatternStrip` (~28186), `PatternInfoCard` (~28369), `PatternDeviceDialog` (~28514), `CompactSlot.set_slim` (~27234) |
 | same | App methods: `set_view_mode`, `_build_pattern_panel`, `_sync_patterns_with_pad_moves`, `swap_patterns`, `clear_selected_pattern`, `save/load_patterns_*`, `select_overview_pad` (~L30800–31700) |
 | same | Undo: `_snapshot_state` / `_restore_snapshot` (~29946) |

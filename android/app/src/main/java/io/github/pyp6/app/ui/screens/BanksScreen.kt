@@ -71,6 +71,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.pyp6.app.ui.MainViewModel
 import io.github.pyp6.app.ui.Nav
 import io.github.pyp6.app.ui.Routes
+import io.github.pyp6.app.ui.components.WavetableLabel
 import io.github.pyp6.app.ui.components.CheckRow
 import io.github.pyp6.app.ui.components.ConfirmDialog
 import io.github.pyp6.app.ui.components.MiniWave
@@ -117,7 +118,7 @@ fun BanksScreen(vm: MainViewModel, nav: Nav) {
     }
 
     ScreenScaffold(
-        title = "PyP6",
+        title = "Pad6",
         subtitle = "Roland P-6 files manager",
         topLevel = true,
         actions = {
@@ -304,7 +305,8 @@ fun PadCard(
             Text(st.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(end = 6.dp).heightIn(min = 36.dp))
             Spacer(Modifier.height(4.dp))
-            MiniWave(summary?.envelope, Modifier.fillMaxWidth().height(34.dp).padding(end = 6.dp),
+            if (st.isWavetable) WavetableLabel(Modifier.fillMaxWidth().height(34.dp).padding(end = 6.dp))
+            else MiniWave(summary?.envelope, Modifier.fillMaxWidth().height(34.dp).padding(end = 6.dp),
                 overFraction = over, playFraction = playFraction)
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {

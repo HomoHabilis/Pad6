@@ -1,6 +1,6 @@
-# PyP6 for Android
+# Pad6 for Android
 
-The PyP6 files manager for the Roland AIRA P-6, on an Android phone. It is
+The Pad6 files manager for the Roland AIRA P-6, on an Android phone. It is
 a native app (Kotlin, Jetpack Compose, Material 3) built from the same logic
 as the desktop app, and it talks to the P-6 the same way: over USB, with the
 P-6 in storage mode showing up as a drive.
@@ -12,10 +12,29 @@ Made for phones (tested layouts: 411 x 914 dp, e.g. a Pixel Pro, and a small
 
 ## Installing (outside the Play Store)
 
+### With automatic updates: Obtainium
+
+[Obtainium](https://github.com/ImranR98/Obtainium) installs apps straight
+from their GitHub releases and updates them when a new release comes out.
+
+1. Install Obtainium (from its
+   [releases](https://github.com/ImranR98/Obtainium/releases), F-Droid or
+   IzzyOnDroid).
+2. In Obtainium, tap **Add App** and paste
+   `https://github.com/HomoHabilis/Roland-P6-files-manager`, then **Add**.
+   It finds the APK among the release downloads by itself.
+3. Tap **Install**. Android asks once to allow installs from Obtainium.
+
+New releases then show up in Obtainium as updates. To also get test
+versions (tags like `v5.3.0-rc1`), turn on **Include prereleases** in the
+app's settings in Obtainium.
+
+### By hand
+
 1. Get the APK:
    - from a release on the
      [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases)
-     (`PyP6-vX.Y.Z-android.apk`), or
+     (`Pad6-vX.Y.Z-android.apk`), or
    - from the latest **Android** workflow run on the Actions tab (artifact
      `android`, a zip holding the APK).
 2. Open the APK on the phone (Files app or the browser's downloads).
@@ -27,6 +46,15 @@ Every build is signed with the same key (`app/sideload.jks`, checked in on
 purpose), so a newer APK installs over an older one and keeps your samples,
 presets and settings. It is a sideloading key for a personal install, not a
 store identity.
+
+**Upgrading from a build made before the rename to Pad6** (app ID
+`io.github.pyp6.android` or `io.github.homohabilis.p6filesmanager`, now
+`io.github.homohabilis.pad6`): the new APK installs as a separate app next to
+the old one and starts empty. To carry
+your work over, save presets to a shared folder in the old app (Presets →
+choose a folder) and export your own waveforms as `.p6wf` packs (Settings),
+load both in the new app, then uninstall the old one. The P-6 drive has to be
+granted once more in the new app.
 
 ## Connecting the P-6
 

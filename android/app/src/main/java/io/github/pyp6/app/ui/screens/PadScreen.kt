@@ -54,6 +54,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.pyp6.app.ui.MainViewModel
 import io.github.pyp6.app.ui.Nav
 import io.github.pyp6.app.ui.Routes
+import io.github.pyp6.app.ui.components.WavetableLabel
 import io.github.pyp6.app.ui.components.CheckRow
 import io.github.pyp6.app.ui.components.MiniWave
 import io.github.pyp6.app.ui.components.MutedText
@@ -62,7 +63,7 @@ import io.github.pyp6.app.ui.components.RateSelector
 import io.github.pyp6.app.ui.components.ScreenScaffold
 import io.github.pyp6.app.ui.components.Section
 import io.github.pyp6.app.ui.components.SwitchRow
-import io.github.pyp6.app.ui.components.ZoneStrip
+import io.github.pyp6.app.ui.components.FamilyGrid
 import io.github.pyp6.app.ui.components.rememberOverFraction
 import io.github.pyp6.app.ui.components.rememberSummary
 import io.github.pyp6.app.ui.formatBytes
@@ -132,7 +133,8 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
             // --- waveform and play
             Section(null) {
                 Box(Modifier.fillMaxWidth().height(96.dp).clickable(enabled = !st.isWavetable) { nav.to(Routes.editor(ref)) }) {
-                    MiniWave(summary?.envelope, Modifier.fillMaxSize(), overFraction = over, playFraction = playing?.position)
+                    if (st.isWavetable) WavetableLabel(Modifier.fillMaxSize())
+                    else MiniWave(summary?.envelope, Modifier.fillMaxSize(), overFraction = over, playFraction = playing?.position)
                 }
                 summary?.let { s ->
                     MutedText(String.format(Locale.ROOT, "%s · %d Hz · %s · %.2f s · %s on the P-6",
@@ -233,7 +235,7 @@ private fun WavetableCard(
         Wavetable.summary(wt.config.register, wt.config.note, wt.config.up, wt.meta).forEach {
             Text(it, style = MaterialTheme.typography.bodyMedium)
         }
-        ZoneStrip(Wavetable.zones(wt.meta), Modifier.fillMaxWidth().height(28.dp))
+        FamilyGrid(Wavetable.zones(wt.meta), Modifier.fillMaxWidth())
         MutedText("On the P-6: set SIZE to 1, then turn START to step through the ${Wavetable.SEGMENTS} waveforms.")
         var open by remember { mutableStateOf(false) }
         ExposedDropdownMenuBox(expanded = open, onExpandedChange = { open = it }) {

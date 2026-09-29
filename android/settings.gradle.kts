@@ -26,7 +26,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PyP6-Android"
+rootProject.name = "Pad6-Android"
 
 // The pure-Kotlin core (audio processing, P-6 file formats) builds without
 // the Android SDK or Google's Maven repository; -Ppyp6.coreOnly=true leaves

@@ -16,7 +16,7 @@ import os
 import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SCRIPT = os.path.join(HERE, "..", "..", "PyP6-Roland-P6-Files-Manager.py")
+SCRIPT = os.path.join(HERE, "..", "..", "Pad6.py")
 OUT = os.path.join(HERE, "..", "core", "src", "main", "resources", "pyp6")
 
 BLOBS = {
