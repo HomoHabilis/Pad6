@@ -25,7 +25,9 @@ pad into 255 waveforms you step through with the START knob.
 
 > **On an Android phone:** the same features as a native app, talking to
 > the P-6 over USB the same way. See [android/README.md](android/README.md);
-> the APK is attached to each release.
+> the APK is attached to each release, and
+> [Obtainium](https://github.com/ImranR98/Obtainium) can install it and keep
+> it updated from there.
 
 ---
 

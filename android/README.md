@@ -12,6 +12,25 @@ Made for phones (tested layouts: 411 x 914 dp, e.g. a Pixel Pro, and a small
 
 ## Installing (outside the Play Store)
 
+### With automatic updates: Obtainium
+
+[Obtainium](https://github.com/ImranR98/Obtainium) installs apps straight
+from their GitHub releases and updates them when a new release comes out.
+
+1. Install Obtainium (from its
+   [releases](https://github.com/ImranR98/Obtainium/releases), F-Droid or
+   IzzyOnDroid).
+2. In Obtainium, tap **Add App** and paste
+   `https://github.com/HomoHabilis/Roland-P6-files-manager`, then **Add**.
+   It finds the APK among the release downloads by itself.
+3. Tap **Install**. Android asks once to allow installs from Obtainium.
+
+New releases then show up in Obtainium as updates. To also get test
+versions (tags like `v5.3.0-rc1`), turn on **Include prereleases** in the
+app's settings in Obtainium.
+
+### By hand
+
 1. Get the APK:
    - from a release on the
      [Releases page](https://github.com/HomoHabilis/Roland-P6-files-manager/releases)
