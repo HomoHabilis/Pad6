@@ -46,6 +46,7 @@ data class UiMessage(val text: String, val error: Boolean = false)
 data class Alert(val title: String, val text: String)
 
 /** What the pattern preview is doing: which slot, how long a step is, how many steps. */
+/** [frames]: one pass of the pattern (the buffer holds a lead-in pass plus the looping one). */
 data class PatternPreview(val slot: PatternSlot, val stepSeconds: Double, val steps: Int, val frames: Int)
 
 /**
@@ -522,7 +523,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (result == null) {
                 message("Pattern ${slot.label} could not be rendered.", error = true); return@launch
             }
-            c.player.play("pattern:${slot.label}", Audio(PatternRender.SR, listOf(result.left, result.right)), loop = true)
+            c.player.play("pattern:${slot.label}", Audio(PatternRender.SR, listOf(result.left, result.right)), loop = true,
+                loopStart = result.loopStart)
             _preview.value = PatternPreview(slot, result.stepSeconds, pat.length, result.frames)
             if (result.missing.isNotEmpty()) {
                 message("Empty pads in this pattern: " + result.missing.joinToString(", ") { "${it.first}${it.second}" })

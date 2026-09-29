@@ -215,6 +215,28 @@ class CoreTest {
     }
 
     @Test
+    fun patternPreviewFirstPassHasNoTailsFromTheEnd() {
+        // One note on step 9 with a tail that rings past the pattern's end.
+        val text = P6Pattern.blankText.split("\n").joinToString("\n") { line ->
+            if (line.startsWith("STEP_NOTE_SMPL 9\t")) line.replace("PART1=-1 NOTE1=-1 VELO1=0 LENG1=0", "PART1=0 NOTE1=60 VELO1=100 LENG1=100")
+            else line
+        }
+        val p = P6Pattern(text)
+        val tone = sine(22050, 4.0)
+        val prm = mapOf("LOOP" to 1, "GATE" to 1, "CHOP" to 16, "TENV_RELEASE" to 252)
+        val res = PatternRender.render(p, { b, pad ->
+            if (b == 'A' && pad == 1) PatternRender.PadVoice(tone.channels[0], tone.channels[0], 22050.0, prm) else null
+        })
+        val hit = (8 * PatternRender.stepSeconds(p) * PatternRender.SR).toInt()
+        fun peak(from: Int, to: Int) = (from until to).maxOf { abs(res.left[it]) }
+        assertEquals(res.frames, res.loopStart)
+        assertEquals(2 * res.frames, res.left.size)
+        assertEquals(0f, peak(0, hit - 100))                                   // first pass: silent until the note
+        assertTrue(peak(res.loopStart, res.loopStart + hit - 100) > 0.05f)     // looping: the tail rings on
+        assertTrue(peak(hit, hit + 1000) > 0.05f)
+    }
+
+    @Test
     fun presetsRoundTripIncludingWavetablesAndPatterns() {
         val store = SampleStore(tmp.newFolder("s"))
         val a = store.write(sine(44100, 0.2), "Kick.wav", "imp")

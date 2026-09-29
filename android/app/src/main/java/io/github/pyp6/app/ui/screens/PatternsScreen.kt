@@ -163,7 +163,9 @@ fun PatternsScreen(vm: MainViewModel, nav: Nav) {
             if (sel != null) {
                 val p = pats[sel]
                 PatternCard(vm, sel, p, project, playing = preview?.slot == sel,
-                    step = preview?.takeIf { it.slot == sel }?.let { pv -> playback?.let { (it.position * pv.steps).toInt() } },
+                    step = preview?.takeIf { it.slot == sel }?.let { pv ->
+                        playback?.let { ((it.position * it.frames) % pv.frames / pv.frames * pv.steps).toInt() }
+                    },
                     onMove = { moving = true })
             }
             PadMap(vm, project, pats[selected ?: PatternSlot(1, 1)]?.takeIf { selected != null && focus == "pattern" }, focusPad)

@@ -372,6 +372,12 @@ object PatternRender {
         }
     }
 
+    /**
+     * Two passes of the pattern in [left]/[right]: the first as it starts
+     * (nothing rings yet), the second as it sounds once looping, with tails
+     * that ring past the end folded back to its start. Play from 0 and loop
+     * from [loopStart]; [frames] is one pass.
+     */
     class Result(
         val left: FloatArray,
         val right: FloatArray,
@@ -380,7 +386,8 @@ object PatternRender {
         val notesPlayed: Int,
         val chopped: Set<Pair<Char, Int>>,
     ) {
-        val frames: Int get() = left.size
+        val frames: Int get() = left.size / 2
+        val loopStart: Int get() = frames
     }
 
     private class Hit(val t: Double, val note: Note, val voice: PadVoice, val gate: Double, val key: Any?) {
@@ -453,8 +460,9 @@ object PatternRender {
                 h.cut = if (group.size > 1) max(nxt - h.t, 0.005) else loopS
             }
         }
-        val bufL = FloatArray(total)
-        val bufR = FloatArray(total)
+        // [0, total): first pass; [total, 2 * total): the looping pass.
+        val bufL = FloatArray(2 * total)
+        val bufR = FloatArray(2 * total)
         var played = 0
         for (h in hits) {
             val cut = h.cut ?: MAX_VOICE_SECONDS
@@ -463,13 +471,17 @@ object PatternRender {
             audio ?: continue
             played++
             var at = Math.floorMod(Math.rint(h.t * SR).toLong(), total.toLong()).toInt()
-            var pos = 0
             val len = audio.first.size
+            for (k in 0 until min(total - at, len)) {
+                bufL[at + k] += audio.first[k]
+                bufR[at + k] += audio.second[k]
+            }
+            var pos = 0
             while (pos < len) {
                 val room = min(total - at, len - pos)
                 for (k in 0 until room) {
-                    bufL[at + k] += audio.first[pos + k]
-                    bufR[at + k] += audio.second[pos + k]
+                    bufL[total + at + k] += audio.first[pos + k]
+                    bufR[total + at + k] += audio.second[pos + k]
                 }
                 pos += room
                 at = 0
@@ -478,7 +490,7 @@ object PatternRender {
         val level = P6Pattern.intOr(p.value("LEVEL"), 100)!!
         val scale = 0.5 * (if (level != 0) max(level, 0) / 100.0 else 1.0)
         var peak = 0.0
-        for (i in 0 until total) {
+        for (i in bufL.indices) {
             bufL[i] = (bufL[i] * scale).toFloat()
             bufR[i] = (bufR[i] * scale).toFloat()
             peak = max(peak, kotlin.math.abs(bufL[i].toDouble()))
@@ -486,7 +498,7 @@ object PatternRender {
         }
         if (peak > 0.95) {
             val g = (0.95 / peak).toFloat()
-            for (i in 0 until total) { bufL[i] *= g; bufR[i] *= g }
+            for (i in bufL.indices) { bufL[i] *= g; bufR[i] *= g }
         }
         return Result(bufL, bufR, stepS, missing, played, chopped)
     }

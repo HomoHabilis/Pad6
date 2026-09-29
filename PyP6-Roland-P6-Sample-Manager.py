@@ -28620,12 +28620,45 @@ class PadVoice:
         return out * (env * vel)[:, None]
 
 
+def _play_looped_from(data, samplerate, loop_start):
+    """Like sd.play(data, loop=True), except that every repeat starts at
+    `loop_start` instead of at 0, so a lead-in plays once. Goes through
+    sounddevice's own play() bookkeeping, so sd.stop() and sd.get_stream()
+    work as after sd.play(). If that internal API is not there (another
+    sounddevice version), it loops from `loop_start` only."""
+    try:
+        ctx = sd._CallbackContext(loop=True)
+        ctx.frames = ctx.check_data(data, None, None)
+        n = ctx.frames
+        pos = 0
+
+        def callback(outdata, frames, time_info, status):
+            nonlocal pos
+            ctx.status |= status
+            i = 0
+            while i < frames:
+                take = min(frames - i, n - pos)
+                outdata[i:i + take] = ctx.data[pos:pos + take]
+                i += take
+                pos += take
+                if pos >= n:
+                    pos = loop_start
+
+        ctx.start_stream(sd.OutputStream, samplerate, ctx.output_channels,
+                         ctx.output_dtype, callback, False,
+                         prime_output_buffers_using_stream_callback=False)
+    except (AttributeError, TypeError):
+        sd.play(data[loop_start:], samplerate, loop=True)
+
+
 def render_pattern(pattern, voice_for, rng=None):
     """Renders one loop of `pattern`.
 
     `voice_for(bank, pad)` returns the PadVoice for a pad, or None when the
     pad is empty. Returns (buffer (frames, 2) float32, step_seconds,
-    info dict with "missing" pads, "notes" played and "chopped" pads).
+    info dict with "missing" pads, "notes" played, "chopped" pads and
+    "loop_start"). The buffer holds two passes: play it from the start
+    and loop from "loop_start" on.
     """
     rng = rng or random.Random()
     tempo = pattern.tempo if pattern.tempo > 0 else 120.0
@@ -28700,7 +28733,12 @@ def render_pattern(pattern, voice_for, rng=None):
             if i + 1 == len(group):
                 nxt += loop_s
             h["cut"] = max(nxt - h["t"], 0.005) if len(group) > 1 else loop_s
-    buf = np.zeros((total, 2), dtype=np.float32)
+    # Two passes: the first as the pattern starts (nothing rings yet), the
+    # second as it sounds once looping, with the tails of notes that ring
+    # past the end folded back to its start. Playback plays the first once
+    # and loops the second (info["loop_start"]).
+    intro = np.zeros((total, 2), dtype=np.float32)
+    body = np.zeros((total, 2), dtype=np.float32)
     played = 0
     for h in hits:
         n, v = h["note"], h["voice"]
@@ -28713,20 +28751,23 @@ def render_pattern(pattern, voice_for, rng=None):
             continue
         played += 1
         at = int(round(h["t"] * PREVIEW_SR)) % total
-        # Folded into the loop: a tail past the end rings on at the start.
+        first = min(total - at, len(audio))
+        intro[at:at + first] += audio[:first]
         pos = 0
         while pos < len(audio):
             room = min(total - at, len(audio) - pos)
-            buf[at:at + room] += audio[pos:pos + room]
+            body[at:at + room] += audio[pos:pos + room]
             pos += room
             at = 0
+    buf = np.concatenate([intro, body])
 
     level = _int_or(pattern.value("LEVEL"), 100)
     buf *= 0.5 * (max(level, 0) / 100.0 if level else 1.0)
     peak = float(np.max(np.abs(buf))) if buf.size else 0.0
     if peak > 0.95:
         buf *= 0.95 / peak
-    return buf, step_s, {"missing": missing, "notes": played, "chopped": chopped}
+    return buf, step_s, {"missing": missing, "notes": played, "chopped": chopped,
+                         "loop_start": total}
 
 
 def load_pad_voice(state, force_mono=False):
@@ -32201,7 +32242,7 @@ class P6ManagerApp:
         self.stop_pattern_preview(stop_audio=False)
         self.stop_playback_waveform()
         try:
-            sd.play(buf, PREVIEW_SR, loop=True)
+            _play_looped_from(buf, PREVIEW_SR, info["loop_start"])
             stream = sd.get_stream()
         except Exception as e:
             dark_showerror("Playback Error", str(e))

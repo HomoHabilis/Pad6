@@ -31,7 +31,8 @@ class Player(private val scope: CoroutineScope) {
     fun isPlaying(id: String) = _state.value?.id == id
 
     @Synchronized
-    fun play(id: String, audio: Audio, loop: Boolean = false, startFrac: Double = 0.0) {
+    /** [loopStart]: where each repeat of a looped buffer begins (a lead-in before it plays once). */
+    fun play(id: String, audio: Audio, loop: Boolean = false, startFrac: Double = 0.0, loopStart: Int = 0) {
         stop()
         if (audio.frames < 2) return
         val stereo = audio.channelCount >= 2
@@ -60,7 +61,7 @@ class Player(private val scope: CoroutineScope) {
             return
         }
         t.write(data, 0, data.size, AudioTrack.WRITE_BLOCKING)
-        if (loop) t.setLoopPoints(0, a.frames, -1)
+        if (loop) t.setLoopPoints(loopStart.coerceIn(0, a.frames - 1), a.frames, -1)
         val start = (startFrac.coerceIn(0.0, 1.0) * a.frames).toInt().coerceIn(0, a.frames - 1)
         if (start > 0) t.playbackHeadPosition = start
         t.play()
