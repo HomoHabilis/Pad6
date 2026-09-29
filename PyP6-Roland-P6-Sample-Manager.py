@@ -536,26 +536,37 @@ def _swallowed(exc, where):
 def _version_from_git():
     """Version of a copy run straight from a git checkout.
 
-    Asks git for the nearest release tag: "5.2.1" on the tagged commit,
-    "5.2.1-3-gabc1234" three commits after it, with "-dirty" appended when
-    there are uncommitted changes. "dev" when that can't be found out - no
-    git, a download of the source without history, or a build made by hand
-    rather than by the release workflow."""
+    Named after the highest release tag in the checkout's history: "5.2.1"
+    on the tagged commit, "5.2.1-3-gabc1234" three commits after it, with
+    "-dirty" appended when there are uncommitted changes (the release
+    workflow names its builds the same way). Not plain git describe: with
+    two tags on one commit it may name the older. "dev" when that can't be
+    found out - no git, a download of the source without history, or a
+    build made by hand rather than by the release workflow."""
     if getattr(sys, "frozen", False):
         return "dev"
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=here, capture_output=True,
+                              text=True, timeout=3)
     try:
-        out = subprocess.run(
-            ["git", "describe", "--tags", "--match", "v[0-9]*", "--dirty"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            capture_output=True, text=True, timeout=3)
+        tags = git("-c", "versionsort.suffix=-", "tag", "--merged", "HEAD",
+                   "--list", "v[0-9]*", "--sort=-v:refname")
+        tag = tags.stdout.split()[0] if tags.returncode == 0 and tags.stdout.split() else ""
+        if not tag:
+            return "dev"
+        version = tag[1:]
+        count = git("rev-list", "--count", f"{tag}..HEAD").stdout.strip()
+        if count.isdigit() and int(count) > 0:
+            sha = git("rev-parse", "--short", "HEAD").stdout.strip()
+            version += f"-{count}-g{sha}"
+        if git("diff", "--quiet", "HEAD").returncode == 1:
+            version += "-dirty"
+        return version
     except (OSError, subprocess.SubprocessError) as _e:
         _swallowed(_e, "_version_from_git")
         return "dev"
-    described = out.stdout.strip()
-    if out.returncode != 0 or not described.startswith("v"):
-        return "dev"
-    return described[1:]
-
 
 if APP_VERSION is None:
     APP_VERSION = _version_from_git()

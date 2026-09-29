@@ -43,7 +43,7 @@ All from `android/`:
 
 APKs are signed with the checked-in `app/sideload.jks` (debug and release), so any build installs over any other.
 
-Optional: `-Ppyp6.versionName=1.2.3 -Ppyp6.versionCode=42` stamps the version (CI takes it from `git describe`).
+Optional: `-Ppyp6.versionName=1.2.3 -Ppyp6.versionCode=42` stamps the version (CI takes it from the highest release tag in the history).
 
 ## Pitfalls (already handled in the build - don't "fix" them back)
 
