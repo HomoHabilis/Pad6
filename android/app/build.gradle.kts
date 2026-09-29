@@ -14,7 +14,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.pyp6.android"
+        // io.github.<GitHub account>: the account this is published from.
+        applicationId = "io.github.homohabilis.p6filesmanager"
         minSdk = 30
         targetSdk = 36
         versionCode = appVersionCode

@@ -28,6 +28,14 @@ purpose), so a newer APK installs over an older one and keeps your samples,
 presets and settings. It is a sideloading key for a personal install, not a
 store identity.
 
+**Upgrading from a build before the package rename** (app ID
+`io.github.pyp6.android`, now `io.github.homohabilis.p6filesmanager`): the new
+APK installs as a separate app next to the old one and starts empty. To carry
+your work over, save presets to a shared folder in the old app (Presets →
+choose a folder) and export your own waveforms as `.p6wf` packs (Settings),
+load both in the new app, then uninstall the old one. The P-6 drive has to be
+granted once more in the new app.
+
 ## Connecting the P-6
 
 The phone needs USB-C to the P-6's USB port (a USB-C to USB-C cable, or the
