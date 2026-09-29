@@ -146,8 +146,9 @@ class CoreTest {
         val pad5 = File(drive.file, "IMPORT/BANK_C/PAD_5")
         val prm = pad5.listFiles()!!.first { it.name.endsWith(".PRM") }
         assertEquals(P6.phraseNumber('C', 5), Prm.readValues(prm.readText())["PHRASE"])
-        assertEquals(2, P6Drive.importFiles(import).size)
-        assertEquals(2 to emptyList<String>(), P6Drive.wipeImport(import))
+        assertEquals(3, P6Drive.importFiles(import).size)       // two samples and C5's .PRM
+        assertEquals(3 to emptyList<String>(), P6Drive.wipeImport(import))
+        assertEquals(0, pad5.list()!!.size)
     }
 
     @Test
@@ -234,6 +235,20 @@ class CoreTest {
         assertEquals(0f, peak(0, hit - 100))                                   // first pass: silent until the note
         assertTrue(peak(res.loopStart, res.loopStart + hit - 100) > 0.05f)     // looping: the tail rings on
         assertTrue(peak(hit, hit + 1000) > 0.05f)
+    }
+
+    @Test
+    fun wipeImportTakesThePrmFilesAlong() {
+        val import = tmp.newFolder("IMPORT")
+        val pad = File(import, "BANK_A/PAD_1").apply { mkdirs() }
+        val stray = File(import, "BANK_C/PAD_4").apply { mkdirs() }
+        listOf("Kick.WAV", "Kick.PRM", "._Kick.WAV", "notes.txt").forEach { File(pad, it).writeText("x") }
+        File(stray, "Old.PRM").writeText("x")        // a .PRM whose sample is already gone
+        val (n, errors) = P6Drive.wipeImport(FileNode(import))
+        assertEquals(4, n)
+        assertTrue(errors.isEmpty())
+        assertEquals(listOf("notes.txt"), pad.list()!!.toList())
+        assertEquals(0, stray.list()!!.size)
     }
 
     @Test

@@ -107,16 +107,28 @@ object P6Drive {
         return padDir.children().filter { !it.isDirectory && isAudio(it.name) }
     }
 
-    /** Every sample in IMPORT, as "BANK_A/PAD_1/name.wav" -> node. */
+    /**
+     * Everything of one pad in IMPORT that goes when the pad is cleared: the
+     * sample, its .PRM (a .PRM left alone would still be on the device with
+     * no sample) and macOS "._" leftovers.
+     */
+    fun padFilesToDelete(importRoot: VNode, bank: Char, pad: Int): List<VNode> {
+        val padDir = importRoot.childIgnoreCase("BANK_$bank")?.childIgnoreCase("PAD_$pad") ?: return emptyList()
+        return padDir.children().filter {
+            !it.isDirectory && (isAudio(it.name) || SafeName.isSidecar(it.name) || it.name.lowercase().endsWith(".prm"))
+        }
+    }
+
+    /** Every pad file in IMPORT (samples, .PRM files, leftovers), as "BANK_A/PAD_1/name.wav" -> node. */
     fun importFiles(importRoot: VNode): List<Pair<String, VNode>> {
         val out = ArrayList<Pair<String, VNode>>()
         for (bank in P6.BANKS) for (pad in P6.PADS) {
-            for (f in padFiles(importRoot, bank, pad)) out.add("BANK_$bank/PAD_$pad/${f.name}" to f)
+            for (f in padFilesToDelete(importRoot, bank, pad)) out.add("BANK_$bank/PAD_$pad/${f.name}" to f)
         }
         return out
     }
 
-    /** Deletes every sample in IMPORT. Returns (deleted, errors). */
+    /** Deletes every sample in IMPORT with its .PRM. Returns (files deleted, errors). */
     fun wipeImport(importRoot: VNode): Pair<Int, List<String>> {
         var n = 0
         val errors = ArrayList<String>()

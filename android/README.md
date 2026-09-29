@@ -1,6 +1,6 @@
 # PyP6 for Android
 
-The PyP6 sample manager for the Roland AIRA P-6, on an Android phone. It is
+The PyP6 files manager for the Roland AIRA P-6, on an Android phone. It is
 a native app (Kotlin, Jetpack Compose, Material 3) built from the same logic
 as the desktop app, and it talks to the P-6 the same way: over USB, with the
 P-6 in storage mode showing up as a drive.
@@ -63,7 +63,7 @@ Everything the desktop app does, arranged as screens instead of one window:
 | **Patterns** | 64 patterns (4 banks of 16): which pads each plays and the other way round, play with the current pads (looped, with step cursor), drag to swap/move, Clear, Sync patterns with pad moves, load from BACKUP or a folder, save to RESTORE or a folder |
 | **P-6** | Connection, Banks → P-6 (with .PRM, per-bank sizes and limit), P-6 → Bank, Wipe IMPORT |
 | **Presets** | Save/load banks and pattern banks, partial overwrite, load one bank into another; same folder layout and `preset.json` as desktop, so presets move between phone and computer (choose a shared folder) |
-| **Settings** | The eleven desktop themes plus Material You, storage warning, removing unused files, `.p6wf` waveform packs import/export |
+| **Settings** | The eleven desktop themes plus Material You, storage warning, removing unused files, `.p6wf` waveform packs import/export, About (project page, original project, license) |
 
 Not carried over: drag & drop of files from a file manager (use Load, which
 takes several files at once), and the desktop's window/UI-scale options
@@ -92,3 +92,11 @@ workflow does all of this on every push that touches `android/`.
   blank pattern embedded in the desktop script.
 - `app/` is the Compose UI. The P-6 drive and preset folders are reached
   through the Storage Access Framework (no storage permission needed).
+
+## License and thanks
+
+Same terms as the rest of the repository: see [LICENSE](../LICENSE) and
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for the libraries the
+APK contains. Thanks to the original
+[PyP6](https://github.com/j0kerpack/Roland-P6-sample-manager) project, which
+this app is built on.

@@ -12,6 +12,7 @@ import io.github.pyp6.core.P6
 import io.github.pyp6.core.audio.Audio
 import io.github.pyp6.core.audio.Wav
 import io.github.pyp6.core.device.P6Drive
+import io.github.pyp6.core.io.SafeName
 import io.github.pyp6.core.io.FileNode
 import io.github.pyp6.core.io.VNode
 import io.github.pyp6.core.model.BankState
@@ -208,7 +209,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun deviceFilesFor(ref: PadRef): List<String> = withContext(Dispatchers.IO) {
         val root = c.device.root() ?: return@withContext emptyList()
         val import = P6Drive.find(root, P6Drive.IMPORT) ?: return@withContext emptyList()
-        runCatching { P6Drive.padFiles(import, ref.bank, ref.pad).map { it.name } }.getOrDefault(emptyList())
+        runCatching { P6Drive.padFilesToDelete(import, ref.bank, ref.pad).filterNot { SafeName.isSidecar(it.name) }.map { it.name } }
+            .getOrDefault(emptyList())
     }
 
     fun ejectPad(ref: PadRef, alsoFromDevice: Boolean) {
@@ -217,7 +219,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (alsoFromDevice) work("Deleting from the P-6 …") {
             val import = c.device.root()?.let { P6Drive.find(it, P6Drive.IMPORT) }
                 ?: throw IllegalStateException("The P-6 drive is not connected.")
-            val files = P6Drive.padFiles(import, ref.bank, ref.pad)
+            val files = P6Drive.padFilesToDelete(import, ref.bank, ref.pad)
             val deleted = files.count { it.delete() }
             message("${ref.label} cleared; $deleted file(s) deleted from the P-6.")
         } else message("${ref.label} cleared.")

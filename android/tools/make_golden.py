@@ -25,7 +25,7 @@ ROOT = os.path.join(HERE, "..", "..")
 OUT = os.path.join(HERE, "..", "core", "src", "test", "resources", "golden")
 os.makedirs(OUT, exist_ok=True)
 
-g = runpy.run_path(os.path.join(ROOT, "PyP6-Roland-P6-Sample-Manager.py"), run_name="golden")
+g = runpy.run_path(os.path.join(ROOT, "PyP6-Roland-P6-Files-Manager.py"), run_name="golden")
 SR = 44100
 
 

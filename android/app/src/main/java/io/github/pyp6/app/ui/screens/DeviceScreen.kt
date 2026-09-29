@@ -174,7 +174,7 @@ fun DeviceScreen(vm: MainViewModel, nav: Nav) {
             }
 
             Section("Wipe IMPORT folder") {
-                MutedText("Permanently deletes every sample already copied to the P-6's IMPORT folder, across all banks. Your pads in the app stay as they are.")
+                MutedText("Permanently deletes every sample already copied to the P-6's IMPORT folder, with its .PRM settings, across all banks. Your pads in the app stay as they are.")
                 OutlinedButton(
                     onClick = { scope.launch { wipeCount = vm.importFileCount() } },
                     enabled = device.hasImport, modifier = Modifier.fillMaxWidth(),
@@ -193,8 +193,8 @@ fun DeviceScreen(vm: MainViewModel, nav: Nav) {
             vm.message(if (n == 0) "The IMPORT folder is empty." else "The IMPORT folder cannot be read.")
             wipeCount = null
         } else ConfirmDialog(
-            "Delete $n sample file${if (n != 1) "s" else ""} from the P-6?",
-            "This removes them from the device's IMPORT folder and cannot be undone. Your pads in the app are not affected.",
+            "Delete $n file${if (n != 1) "s" else ""} from the P-6?",
+            "Every sample in the device's IMPORT folder goes, with its .PRM settings file. This cannot be undone. Your pads in the app are not affected.",
             "Delete", destructive = true, onDismiss = { wipeCount = null }, onConfirm = vm::wipeImport,
         )
     }

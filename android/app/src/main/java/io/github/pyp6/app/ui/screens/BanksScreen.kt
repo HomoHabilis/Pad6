@@ -118,7 +118,7 @@ fun BanksScreen(vm: MainViewModel, nav: Nav) {
 
     ScreenScaffold(
         title = "PyP6",
-        subtitle = "Roland P-6 sample manager",
+        subtitle = "Roland P-6 files manager",
         topLevel = true,
         actions = {
             IconButton(onClick = vm::undo, enabled = canUndo) { Icon(Icons.AutoMirrored.Filled.Undo, "Undo") }
