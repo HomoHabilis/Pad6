@@ -747,7 +747,7 @@ def collect_about_info():
     rows = []
     rows.append(("Version", APP_VERSION))
     rows.append(("Project", APP_URL))
-    rows.append(("License", "see LICENSE in the project"))
+    rows.append(("License", "MIT - see LICENSE in the project"))
     try:
         rows.append(("Python", f"{sys.version.split()[0]} on {sys.platform}"))
     except Exception as _e:

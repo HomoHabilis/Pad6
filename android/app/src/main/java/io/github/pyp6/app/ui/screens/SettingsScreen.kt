@@ -117,7 +117,7 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
             Section("About") {
                 Text("Pad6 for Android ${vm.c.appVersion}", style = MaterialTheme.typography.bodyLarge)
                 MutedText("Roland AIRA P-6 files manager. Chop is inspired by p6-wave-slice by Warren Blackwell. Not affiliated with Roland.")
-                MutedText("Thanks to the original PyP6 project, which this one is built on.")
+                MutedText("Thanks to the original PyP6 project, which this one is built on. MIT License.")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/HomoHabilis/Pad6"))) }) { Text("Project page") }
                     TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/j0kerpack/Roland-P6-sample-manager"))) }) { Text("Original project") }
