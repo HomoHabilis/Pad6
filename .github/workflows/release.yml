@@ -18,11 +18,13 @@ on:
     branches: ["**"]
     paths:
       - "Pad6.py"
+      - "minifreak_export.py"
       - "pad6logo.ico"
       - ".github/workflows/release.yml"
   pull_request:
     paths:
       - "Pad6.py"
+      - "minifreak_export.py"
       - "pad6logo.ico"
       - ".github/workflows/release.yml"
   workflow_dispatch:

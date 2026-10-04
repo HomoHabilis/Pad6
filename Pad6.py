@@ -24119,7 +24119,8 @@ class SynthDialog(tk.Toplevel):
         self.cb_map.pack(side="left")
         add_tooltip(self.cb_map,
                     "Writes a table of what sits on all 255 steps: family, morph "
-    "position and start frame. A file dialog opens after Apply.")
+    "position and start frame. A file dialog opens after Apply. Export for "
+    "MiniFreak writes its own frame map (.txt) beside the WAV when this is ticked.")
 
         # Deliberately identical to the Chop dialog's footer: same colours,
         # same widths, same padding, same order.
@@ -24133,6 +24134,20 @@ class SynthDialog(tk.Toplevel):
         add_tooltip(self.btn_apply,
                     "Builds the wavetable and puts it on the pad with its .PRM. On the "
     "P-6, set SIZE to 1 and sweep START through the waveforms.")
+        # Writes a file and nothing else: the pad, the table and this dialog
+        # stay exactly as they are, so it can be used to try a selection on
+        # the MiniFreak before (or instead of) building it for the P-6.
+        self.btn_minifreak = RoundedButton(foot, text="Export for MiniFreak\u2026",
+                                           command=self._export_minifreak,
+                                           bg=BG_INPUT, fg=FG_TEXT,
+                                           parent_bg=BG_DARK, width=170)
+        self.btn_minifreak.pack(side="right", padx=4)
+        add_tooltip(self.btn_minifreak,
+                    "Saves the current selection as a wavetable for the Arturia "
+    "MiniFreak's Import (firmware 5.0+): 24-bit mono WAV, 512-point frames, "
+    "189 frames by default. Nothing on the pad changes. With \"Save waveform "
+    "overview\" ticked, a .txt of which frames hold which family is written "
+    "beside it.")
 
         # Same reasoning as the alloc line used to need - status text
         # length varies a lot.
@@ -25606,6 +25621,96 @@ class SynthDialog(tk.Toplevel):
         except tk.TclError as _e:
             _swallowed(_e, "SynthDialog._cancel")
         self.destroy()
+
+    def _export_minifreak(self):
+        """Writes the current selection as a MiniFreak wavetable file.
+
+        The rendering lives in minifreak_export.py, beside this script, so
+        none of it runs through the P-6 build: no register, no band limit
+        for the P-6's range, no .PRM, and nothing on the pad is touched.
+        Same split as the P-6 table though - the frames are shared out
+        evenly between the families in the step order.
+        """
+        title = "Export for MiniFreak"
+        try:
+            import minifreak_export as mf
+        except Exception as e:
+            dark_showerror(title, "The MiniFreak exporter could not be loaded. "
+                                  "minifreak_export.py has to sit in the same "
+                                  f"folder as {APP_NAME}.py.\n\n{e}", parent=self)
+            return
+        sel = self._active_selection()
+        if not sel:
+            dark_showwarning("Nothing selected",
+                             "Please choose at least one waveform family.",
+                             parent=self)
+            return
+        resolved = self._resolved_selection()
+        lo, hi = len(resolved), mf.MF_MAX_FRAMES
+        initial = max(lo, mf.mf_default_frames(resolved))
+        while True:
+            text = dark_ask_text(
+                self, title,
+                f"Frames in the table ({lo}-{hi}), shared evenly between "
+                f"{_n_families(len(resolved))}.\n{mf.MF_SAFE_FRAMES} is the most "
+                f"reported to load safely.", str(initial))
+            if text is None:
+                return
+            try:
+                frames = int(str(text).strip())
+            except ValueError:
+                frames = 0
+            if lo <= frames <= hi:
+                break
+            dark_showwarning(title, f"Please enter a whole number from {lo} to {hi}.",
+                             parent=self)
+        if frames > mf.MF_SAFE_FRAMES and not dark_askyesno(
+                title, f"{frames} frames is more than the {mf.MF_SAFE_FRAMES} "
+                       f"MiniFreak V is reported to handle - longer tables have "
+                       f"crashed it.\n\nExport anyway?", parent=self):
+            return
+
+        if self._simple():
+            label = self.var_set.get() or "Basic"
+        else:
+            label = sel[0] if len(sel) == 1 else "Custom Selection"
+        start = load_config().get("last_minifreak_dir")
+        dlg = FileSaveDialog(self, title=title,
+                             initial_dir=start if start and os.path.isdir(start)
+                             else os.path.expanduser("~"),
+                             initial_file=mf.mf_file_name(label) + ".wav",
+                             extension=".wav")
+        self.wait_window(dlg)
+        # FileSaveDialog takes the grab; see _import_cycles.
+        try:
+            self.update_idletasks()
+            self.grab_set()
+        except tk.TclError as _e:
+            _swallowed(_e, "SynthDialog._export_minifreak")
+        path = dlg.result_path
+        if not path:
+            return
+        save_config_value("last_minifreak_dir", os.path.dirname(path))
+
+        self._stop_preview()
+        self._status("Rendering the MiniFreak wavetable \u2026", "info", clear_after=None)
+        self.configure(cursor="watch")
+        self.update_idletasks()
+        try:
+            # The root note only voices the formant families (Vowel, Piano,
+            # Strings, Brass), which place their resonances in Hz; the
+            # frames themselves carry no pitch.
+            table, _rows = mf.mf_export(resolved, path, frames,
+                                        note=self.var_note.get() or mf.MF_DEFAULT_NOTE,
+                                        write_map=bool(self.var_save_map.get()))
+        except Exception as e:
+            self._status("")
+            dark_showerror(title, f"Could not export the wavetable:\n{e}", parent=self)
+            return
+        finally:
+            self.configure(cursor="")
+        self._status(f"Exported {len(table)} frames to {os.path.basename(path)}.",
+                     "good")
 
     def _apply(self):
         sel = self._active_selection()

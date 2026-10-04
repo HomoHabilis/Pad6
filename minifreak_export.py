@@ -28,8 +28,12 @@ count from 1 to 512 instead of the P-6's fixed 255.
 
 Needs the same Python environment as Pad6.py (numpy, tkinter, sounddevice,
 soundfile), since the engine is imported from it. No window is opened.
+
+The Synth dialog's "Export for MiniFreak..." button uses this module too,
+which is why it takes the engine from the running app when there is one.
 """
 import argparse
+import importlib
 import os
 import re
 import struct
@@ -42,12 +46,36 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 if HERE not in sys.path:
     sys.path.insert(0, HERE)
 
-import Pad6 as p6  # noqa: E402  (the engine; importing it builds no UI)
+
+def _engine():
+    """Pad6's engine module.
+
+    Inside the app, Pad6 is __main__, and `import Pad6` would run all of
+    it a second time under another name - another 178 families decoded,
+    and a second WT_FAMILY_GROUPS the dialog never sees. So the running
+    app is used when it is the one asking. From the command line it is
+    imported normally; that builds no UI. importlib rather than an import
+    statement so PyInstaller, which bundles this file with the app, does
+    not pack a second copy of Pad6 for a path the app never takes.
+    """
+    main = sys.modules.get("__main__")
+    if main is not None and hasattr(main, "WTSynth") and hasattr(main, "wt_family_entry"):
+        return main
+    return importlib.import_module("Pad6")
+
+
+p6 = _engine()
 
 
 MF_FRAME = 512          # points per cycle, fixed by the MiniFreak format
 MF_MAX_FRAMES = 512
-MF_DEFAULT_FRAMES = 256
+# negligible-mass/minifreak-converter reports MiniFreak V crashing on
+# tables longer than this. The limit is not published by Arturia and was
+# seen on the .raw route, but nothing is gained by finding out on the
+# synth, so it is the default for every export, and going past it is
+# allowed with a warning.
+MF_SAFE_FRAMES = 189
+MF_DEFAULT_FRAMES = MF_SAFE_FRAMES
 # The rate written into the header. A wavetable has no real sample rate -
 # each frame is one cycle whatever the pitch - but 48 kHz is the
 # MiniFreak's own and what its importer expects to see.
@@ -73,11 +101,6 @@ MF_PEAK_DB = -0.3
 # resonances in Hz, so they need a reference pitch even though the frame
 # itself has none. C3 is the root Pad6's Mid and Lead registers use.
 MF_DEFAULT_NOTE = "C3"
-# negligible-mass/minifreak-converter reports that MiniFreak V crashes on
-# .raw tables longer than this when they are dropped into its Factory
-# folder. The official WAV import path is not known to share the limit,
-# but the raw route gets a warning.
-MF_RAW_SAFE_FRAMES = 189
 
 
 # ---------------------------------------------------------------------------
@@ -161,13 +184,12 @@ def _multi_entry(item):
 # ---------------------------------------------------------------------------
 
 def mf_default_frames(selection):
-    """A lone multi family gets one frame per shape - 255 shapes squeezed
-    into 256 frames would repeat one of them for nothing. Anything else
-    gets MF_DEFAULT_FRAMES."""
+    """MF_DEFAULT_FRAMES, except that a lone multi family with fewer shapes
+    gets one frame per shape - more would only repeat shapes."""
     if len(selection) == 1:
         multi = _multi_entry(selection[0])
         if multi:
-            return max(1, min(MF_MAX_FRAMES, len(multi.get("shapes") or [])))
+            return max(1, min(MF_DEFAULT_FRAMES, len(multi.get("shapes") or [])))
     return MF_DEFAULT_FRAMES
 
 
@@ -335,6 +357,18 @@ def write_mf_map(path, rows, frames, note):
             f.write(f"{lo:3d}-{hi:<3d}     {pos}    {name:<26} {span}\n")
 
 
+def mf_export(selection, wav_path, frames=None, note=MF_DEFAULT_NOTE,
+              write_map=False):
+    """Builds one table and writes it to `wav_path`, with its .txt frame map
+    beside it when asked. What the Synth dialog's export button calls.
+    Returns (table, rows)."""
+    table, rows = mf_build(selection, frames, note)
+    write_mf_wav(wav_path, table)
+    if write_map:
+        write_mf_map(os.path.splitext(wav_path)[0] + ".txt", rows, len(table), note)
+    return table, rows
+
+
 def mf_file_name(label):
     """A short FAT/Windows-safe name: the files are copied around by hand
     and MiniFreak V shows the name in a narrow browser."""
@@ -350,10 +384,10 @@ def mf_save(table, out_dir, label, fmt="wav", rows=None, note=MF_DEFAULT_NOTE):
     if fmt in ("wav", "both"):
         write_mf_wav(base + ".wav", table)
         written.append(base + ".wav")
+    if len(table) > MF_SAFE_FRAMES:
+        print(f"  warning: {len(table)} frames - MiniFreak V is reported to "
+              f"crash on tables above {MF_SAFE_FRAMES}")
     if fmt in ("raw", "both"):
-        if len(table) > MF_RAW_SAFE_FRAMES:
-            print(f"  warning: {len(table)} frames - MiniFreak V is reported to "
-                  f"crash on .raw tables above {MF_RAW_SAFE_FRAMES}")
         write_mf_raw(base + ".raw", table)
         written.append(base + ".raw")
     if rows is not None:
@@ -466,8 +500,9 @@ def main(argv=None):
                         help="output folder (default: %(default)s)")
     common.add_argument("--frames", type=int, default=None,
                         help=f"frames per table, 1-{MF_MAX_FRAMES} (default "
-                             f"{MF_DEFAULT_FRAMES}; a lone multi family gets "
-                             f"one per shape)")
+                             f"{MF_DEFAULT_FRAMES}, the largest reported safe; "
+                             f"a lone multi family with fewer shapes gets one "
+                             f"per shape)")
     common.add_argument("--format", choices=("wav", "raw", "both"), default="wav",
                         help="wav for the MiniFreak's Import, raw for MiniFreak "
                              "V's WT folder (default: %(default)s)")

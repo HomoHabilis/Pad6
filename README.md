@@ -819,25 +819,34 @@ the Length unit stays available.
 
 ### 5.16 Exporting wavetables for the Arturia MiniFreak
 
-`minifreak_export.py`, next to `Pad6.py`, writes the same families as
-wavetables for the MiniFreak's **Import Wavetables** (firmware 5.0 and
-later): mono, 24-bit WAV files built from 512-point single cycles, with the
-`clm ` chunk Pigments, Serum and Vital read to find the frame size. It is a
-command-line companion, not part of the app: it writes only to the folder
-you give it, and never touches a pad, a bank or `~/.pyp6`.
+The same families can be saved as wavetables for the MiniFreak's **Import
+Wavetables** (firmware 5.0 and later): mono, 24-bit WAV files built from
+512-point single cycles, with the `clm ` chunk Pigments, Serum and Vital
+read to find the frame size. The export only writes the file you name - no
+pad, bank or P-6 table is touched.
 
 It follows the Synth dialog's logic. You pick families, the frames are
 shared out evenly between them, and each family sweeps its morph across its
 share. The difference is the total: anything from 1 to 512 frames instead of
-the P-6's fixed 255 (default 256). Every frame gets all 255 harmonics a
-512-point cycle can hold - the MiniFreak band limits on playback, so there
-is no register or "Plays up to" to choose.
+the P-6's fixed 255, **189 by default** (see the note below). Every frame
+gets all 255 harmonics a 512-point cycle can hold - the MiniFreak band
+limits on playback, so the register and "Plays up to" do not apply.
 
-Run it with the same Python environment as Pad6 (no window opens):
+**From the Synth dialog.** Pick a set (Simple) or a step order (Advanced)
+as for the P-6, then **Export for MiniFreak...** in the footer. It asks for
+the frame count, then where to save the WAV. With **Save waveform overview**
+ticked, a `.txt` saying which frames hold which family is written beside
+it - the MiniFreak shows a position, not a name. The root note voices the
+formant families (Vowel, Piano, Strings, Brass); nothing else depends on it.
+
+**From the command line.** `minifreak_export.py`, next to `Pad6.py`, does
+the same in bulk. The button needs it too, so keep the two files together
+when running from source. Run it with the same Python environment as Pad6
+(no window opens):
 
 ```bash
 python3 minifreak_export.py list -v          # every set and its families
-python3 minifreak_export.py sets             # one file per set, 256 frames
+python3 minifreak_export.py sets             # one file per set, 189 frames
 python3 minifreak_export.py sets "Vintage Collection 1" Basic --frames 64
 python3 minifreak_export.py build Saw "Pulse / PWM" FM --frames 512 --name MyTable
 python3 minifreak_export.py each --set Basic --frames 32   # one file per family
@@ -847,19 +856,18 @@ python3 minifreak_export.py p6               # tables already built for pads
 - **Sets** are Basic (the same sixteen as Simple mode), each collection,
   each of your own folders, and every multi family on its own. Collections
   go in **whole**: the sixteen-family limit exists for the P-6's 255 steps,
-  and 512 frames have room for all 63 Hot Microwaves sweeps.
+  and even 189 frames give each of the 63 Hot Microwaves sweeps three.
 - **Your own waveforms** come from `waveforms.json` and any `.p6wf` pack in
   `user_wave_families/`, and can be named in `build` like any built-in.
-- A **multi family** steps through its shapes rather than morphing. On its
-  own it gets one frame per shape (255 for Hot MW 1 Big 255WF).
+- A **multi family** steps through its shapes rather than morphing. Hot MW
+  1 Big 255WF has more shapes than 189 frames, so they are picked evenly
+  across it; `--frames 255` keeps every one.
 - **`p6`** converts the WAVs Pad6 built for pads (`~/.pyp6/wavetables/`, or
   files you name). The cycles are read back exactly, but they keep the
   band limit chosen for the P-6; rebuild from the families for the full
   bandwidth.
-- `--map` also writes a `.txt` saying which frames hold which family -
-  the MiniFreak shows a position, not a name. `--note` sets the pitch the
-  formant families (Vowel, Piano, Strings, Brass) are voiced at (default
-  C3). `--format raw` writes the headerless `.raw` MiniFreak V keeps in its
+- `--map` writes the same `.txt` frame map as the dialog. `--note` sets
+  the pitch the formant families are voiced at (default C3). `--format raw` writes the headerless `.raw` MiniFreak V keeps in its
   `WT` folder instead.
 - **Saw + Sub** renders as on the Bass register: one cycle per frame leaves
   nowhere below the fundamental, so the saw sits an octave up and the sub
@@ -867,9 +875,9 @@ python3 minifreak_export.py p6               # tables already built for pads
 
 > How many frames the MiniFreak accepts per table is not published.
 > [minifreak-converter](https://github.com/negligible-mass/minifreak-converter)
-> reports MiniFreak V crashing on `.raw` tables above 189 frames, and the
-> script warns when a `.raw` export goes past that. If the import refuses a
-> long table, try `--frames 128`.
+> reports MiniFreak V crashing on tables above 189 frames (seen with the
+> `.raw` files it keeps in its `WT` folder). That is why 189 is the default.
+> Up to 512 is allowed, but both the button and the script warn first.
 
 ---
 
