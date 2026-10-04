@@ -81,10 +81,7 @@ internal object BasicFamilies {
 
     val triangle = WtRender { s, m, _ ->
         val sk = lerp(0.5, 0.06, m)
-        val raw = DoubleArray(s.L) {
-            val x = s.tf[it]
-            (if (x < sk) x / sk else 1.0 - (x - sk) / (1.0 - sk)) * 2 - 1
-        }
+        val raw = s.sample { _, x -> (if (x < sk) x / sk else 1.0 - (x - sk) / (1.0 - sk)) * 2 - 1 }
         s.bandLimit(raw) to "skew ${fmt(sk, 2)}"
     }
 
@@ -97,24 +94,23 @@ internal object BasicFamilies {
 
     val folder = WtRender { s, m, _ ->
         val g = lerp(1.0, 8.0, m)
-        s.bandLimit(DoubleArray(s.L) { fold(sin(2 * PI * s.t[it]), g) }) to "fold ${fmt(g, 2)}"
+        s.bandLimit(s.sample { t, _ -> fold(sin(2 * PI * t), g) }) to "fold ${fmt(g, 2)}"
     }
 
     val sync = WtRender { s, m, _ ->
         val r = lerp(1.0, 6.0, m)
-        s.bandLimit(DoubleArray(s.L) { sin(2 * PI * r * s.tf[it]) }) to "ratio ${fmt(r, 2)}"
+        s.bandLimit(s.sample { _, x -> sin(2 * PI * r * x) }) to "ratio ${fmt(r, 2)}"
     }
 
     val fm = WtRender { s, m, _ ->
         val idx = lerp(0.0, 8.0, m)
-        s.bandLimit(DoubleArray(s.L) { sin(2 * PI * s.t[it] + idx * sin(4 * PI * s.t[it])) }) to
+        s.bandLimit(s.sample { t, _ -> sin(2 * PI * t + idx * sin(4 * PI * t)) }) to
             "C:M 1:2 I=${fmt(idx, 2)}"
     }
 
     val phaseDist = WtRender { s, m, _ ->
         val bp = lerp(0.5, 0.96, m)
-        s.bandLimit(DoubleArray(s.L) {
-            val x = s.tf[it]
+        s.bandLimit(s.sample { _, x ->
             val pd = if (x < bp) 0.5 * x / bp else 0.5 + 0.5 * (x - bp) / (1 - bp)
             sin(2 * PI * pd)
         }) to "bp ${fmt(bp, 2)}"
@@ -122,7 +118,7 @@ internal object BasicFamilies {
 
     val staircase = WtRender { s, m, _ ->
         val lv = max(2, Math.rint(geom(32.0, 2.0, m)).toInt())
-        s.bandLimit(DoubleArray(s.L) { Math.rint((2 * s.tf[it] - 1) * (lv / 2.0)) / (lv / 2.0) }) to "$lv levels"
+        s.bandLimit(s.sample { _, x -> Math.rint((2 * x - 1) * (lv / 2.0)) / (lv / 2.0) }) to "$lv levels"
     }
 
     private class Vowel(val name: String, val c: DoubleArray, val g: DoubleArray, val b: DoubleArray)
