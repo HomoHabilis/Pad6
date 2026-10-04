@@ -85,15 +85,6 @@ MF_SR = 48000
 # range: the MiniFreak band limits its tables per note on playback, so
 # dropping harmonics here would only make the table duller.
 MF_HARMONICS = MF_FRAME // 2 - 1
-# Families are rendered at this multiple of the frame and then reduced to
-# 512 points in the frequency domain. Additive families come out the same
-# either way, but FM, Hard Sync, Phase Dist., Wave Folder and Staircase are
-# built in the time domain, and at 512 points their upper partials fold
-# back before band_limit() ever sees them. Measured against a 32x render,
-# the worst FM / Hard Sync / Phase Dist. frame was 44 % of full scale off at
-# 1x, 4 % at 8x and 1.4 % at 16x - the last for about 11 s to write every
-# set, which is a fair price for a one-off export.
-MF_OVERSAMPLE = 16
 # Pigments-style tables are normalised close to full scale; a little
 # headroom keeps the 24-bit rounding clear of the rail.
 MF_PEAK_DB = -0.3
@@ -193,23 +184,16 @@ def mf_default_frames(selection):
     return MF_DEFAULT_FRAMES
 
 
-def _to_frame(w):
-    """One oversampled cycle -> 512 points, by keeping the harmonics a
-    512-point frame can hold. Exact for a band-limited cycle: no
-    interpolation, nothing folds back."""
-    spec = np.fft.rfft(w)[:MF_FRAME // 2 + 1]
-    spec[-1] = 0.0
-    return np.fft.irfft(spec, n=MF_FRAME)
-
-
 def mf_build(selection, frames=None, note=MF_DEFAULT_NOTE, peak_db=MF_PEAK_DB,
              harmonics=MF_HARMONICS):
     """Renders `selection` (family names or library entries, in order) into
     a (frames, 512) float array plus one map row per family.
 
     One synth for the whole table, one cycle per frame, which is what makes
-    every frame a single cycle the MiniFreak can loop. It runs oversampled
-    (MF_OVERSAMPLE) and each frame is reduced to 512 points afterwards.
+    every frame a single cycle the MiniFreak can loop. The families that
+    are a formula of the phase (FM, Hard Sync, Staircase ...) are kept
+    from aliasing by WTSynth.sample() itself, so nothing here needs to
+    render finer than 512 points.
     """
     if not selection:
         raise ValueError("nothing selected")
@@ -220,8 +204,7 @@ def mf_build(selection, frames=None, note=MF_DEFAULT_NOTE, peak_db=MF_PEAK_DB,
         raise ValueError(f"{len(selection)} families need at least as many "
                          f"frames, got {frames}")
     f0 = p6.midi_to_hz(p6.name_to_midi(note))
-    s = p6.WTSynth(MF_FRAME * MF_OVERSAMPLE, 1,
-                   max(1, min(int(harmonics), MF_HARMONICS)))
+    s = p6.WTSynth(MF_FRAME, 1, max(1, min(int(harmonics), MF_HARMONICS)))
     peak = 10.0 ** (peak_db / 20.0)
 
     counts = p6.wt_split_steps(len(selection), frames)
@@ -240,7 +223,7 @@ def mf_build(selection, frames=None, note=MF_DEFAULT_NOTE, peak_db=MF_PEAK_DB,
                 int(round(j * (len(shapes) - 1) / (count - 1))) for j in range(count)]
             first = last = ""
             for j, k in enumerate(picks):
-                out[i + j] = _to_frame(p6.wt_points_to_cycle(shapes[k], s))
+                out[i + j] = p6.wt_points_to_cycle(shapes[k], s)
                 desc = labels[k] if k < len(labels) else str(k + 1)
                 first = first or desc
                 last = desc
@@ -249,7 +232,7 @@ def mf_build(selection, frames=None, note=MF_DEFAULT_NOTE, peak_db=MF_PEAK_DB,
             for j in range(count):
                 m = 0.5 if count == 1 else j / (count - 1)
                 w, desc = fn(s, m, f0)
-                out[i + j] = _to_frame(s.band_limit(np.asarray(w, dtype=np.float64)))
+                out[i + j] = s.band_limit(np.asarray(w, dtype=np.float64))
                 first = first or desc
                 last = desc
         rows.append((i, i + count - 1, name, first, last))
