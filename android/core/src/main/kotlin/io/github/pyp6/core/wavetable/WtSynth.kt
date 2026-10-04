@@ -79,6 +79,33 @@ class WtSynth(val L: Int, val R: Int, val h: Int) {
         return Fft.irfft(re, im, L)
     }
 
+    /**
+     * Evaluates a time-domain shape without aliasing (WTSynth.sample).
+     * [shape] gets the phase (0..R across the segment) and the phase within
+     * each cycle (0..1). It is evaluated [Wavetable.OVERSAMPLE] times finer
+     * than the segment and only the harmonics the segment can hold are
+     * carried down to [L] points, so the corners and jumps of a formula do
+     * not fold back onto the harmonics that are kept.
+     */
+    fun sample(shape: (Double, Double) -> Double): DoubleArray {
+        val n = L * Wavetable.OVERSAMPLE
+        val raw = DoubleArray(n) {
+            val ph = it.toDouble() / n * R
+            shape(ph, ph % 1.0)
+        }
+        val (re, im) = Fft.rfft(raw)
+        val half = L / 2 + 1
+        val oRe = DoubleArray(half)
+        val oIm = DoubleArray(half)
+        val keep = minOf(h * R, L / 2)
+        for (i in 1..keep) { oRe[i] = re[i]; oIm[i] = im[i] }
+        if (L % 2 == 0) { oRe[half - 1] = 0.0; oIm[half - 1] = 0.0 }
+        val out = Fft.irfft(oRe, oIm, L)
+        val scale = L.toDouble() / n
+        for (i in out.indices) out[i] *= scale
+        return out
+    }
+
     fun formant(f0: Double, centers: DoubleArray, gains: DoubleArray, bws: DoubleArray, tilt: Double = 1.0): DoubleArray {
         val out = DoubleArray(h)
         for (i in 0 until h) {

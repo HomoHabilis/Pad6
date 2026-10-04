@@ -14450,6 +14450,11 @@ WT_MAX_SECONDS = 5.9
 WT_MAX_SEG_FRAMES = int(WT_MAX_SECONDS * WT_SR) // WT_SEGMENTS   # 1020
 WT_PEAK = 0.9
 WT_PREVIEW_SECONDS = 5.0
+# How much finer WTSynth.sample() evaluates a time-domain family before
+# bringing it down to the segment length. 16 puts the remaining fold-back
+# of the worst one, Hard Sync, about 58 dB down (from 21 at 1x); the cost
+# is one FFT of 16 x L points per step, a few milliseconds per table.
+WT_OVERSAMPLE = 16
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 # Three octaves above the sample's OWN pitch is as far as the P-6 will
@@ -14514,10 +14519,11 @@ class WTSynth:
     def __init__(self, L, R, h):
         self.L, self.R, self.h = L, R, h
         self.t = (np.arange(L) / L) * R
-        # Phase within the current cycle, 0..1. Used by the families that
-        # need a ramp rather than a harmonic series - triangle, FM, phase
-        # distortion, staircase - via `s.tf`, which is why a scan for
-        # `self.tf` reads finds nothing.
+        # Phase within the current cycle, 0..1, at the segment's own
+        # resolution. The families that need a ramp rather than a harmonic
+        # series no longer read it: they go through sample(), which hands
+        # them the same two phases on a finer grid. Kept for any family that
+        # wants the ramp itself rather than something built on top of it.
         self.tf = self.t % 1.0
         self.k = np.arange(1, h + 1, dtype=float)
         arg = 2 * np.pi * np.outer(self.k, self.t)
@@ -14554,6 +14560,36 @@ class WTSynth:
         # on Pulse / PWM and 9% on Noise Morph before this line.
         spec[-1] = 0.0
         return np.fft.irfft(spec, n=self.L)
+
+    def sample(self, shape):
+        """Evaluates a time-domain shape without aliasing.
+
+        `shape(t, tf)` gets the phase (0..R across the segment) and the
+        phase within each cycle (0..1), like `s.t` and `s.tf`. The six
+        families that build their wave as a formula of the phase - triangle,
+        folder, sync, FM, phase distortion, staircase - used to evaluate it
+        on the segment's own L points and band-limit afterwards. A formula
+        with a corner or a jump has harmonics far past L/2, and sampling it
+        at L folds all of those back onto the harmonics band_limit() keeps,
+        where nothing can take them out again. Measured on the Bass table
+        against a clean render, the worst step of Hard Sync was only 21 dB
+        above that fold-back, Wave Folder 38 dB, Triangle 51 dB.
+
+        So the formula is evaluated WT_OVERSAMPLE times finer and only the
+        harmonics this segment can hold are carried down to L points.
+        Additive families are unaffected; FM happens to have a short enough
+        spectrum that it never aliased, and comes out as before.
+        """
+        n = self.L * WT_OVERSAMPLE
+        t = (np.arange(n) / n) * self.R
+        spec = np.fft.rfft(shape(t, t % 1.0))
+        out = np.zeros(self.L // 2 + 1, dtype=complex)
+        keep = min(int(self.h * self.R), self.L // 2)
+        out[1:keep + 1] = spec[1:keep + 1]
+        # The Nyquist bin, for the same reason as in band_limit().
+        if self.L % 2 == 0:
+            out[-1] = 0.0
+        return np.fft.irfft(out, n=self.L) * (self.L / n)
 
     def formant(self, f0, centers, gains, bws, tilt=1.0):
         freqs = self.k * f0
@@ -14642,8 +14678,9 @@ def _wtf_pulse(s, m, f0):
 
 def _wtf_triangle(s, m, f0):
     sk = _wt_lerp(0.5, 0.06, m)
-    raw = np.where(s.tf < sk, s.tf / sk, 1.0 - (s.tf - sk) / (1.0 - sk)) * 2 - 1
-    return s.band_limit(raw), f"skew {sk:.2f}"
+    w = s.sample(lambda t, tf: np.where(tf < sk, tf / sk,
+                                        1.0 - (tf - sk) / (1.0 - sk)) * 2 - 1)
+    return s.band_limit(w), f"skew {sk:.2f}"
 
 
 def _wtf_sine(s, m, f0):
@@ -14656,30 +14693,33 @@ def _wtf_sine(s, m, f0):
 
 def _wtf_folder(s, m, f0):
     g = _wt_lerp(1.0, 8.0, m)
-    return s.band_limit(_wt_fold(np.sin(2 * np.pi * s.t), g)), f"fold {g:.2f}"
+    w = s.sample(lambda t, tf: _wt_fold(np.sin(2 * np.pi * t), g))
+    return s.band_limit(w), f"fold {g:.2f}"
 
 
 def _wtf_sync(s, m, f0):
     r = _wt_lerp(1.0, 6.0, m)
-    return s.band_limit(np.sin(2 * np.pi * r * s.tf)), f"ratio {r:.2f}"
+    return s.band_limit(s.sample(lambda t, tf: np.sin(2 * np.pi * r * tf))), \
+        f"ratio {r:.2f}"
 
 
 def _wtf_fm(s, m, f0):
     idx = _wt_lerp(0.0, 8.0, m)
-    return (s.band_limit(np.sin(2 * np.pi * s.t + idx * np.sin(4 * np.pi * s.t))),
-            f"C:M 1:2 I={idx:.2f}")
+    w = s.sample(lambda t, tf: np.sin(2 * np.pi * t + idx * np.sin(4 * np.pi * t)))
+    return s.band_limit(w), f"C:M 1:2 I={idx:.2f}"
 
 
 def _wtf_phasedist(s, m, f0):
     bp = _wt_lerp(0.5, 0.96, m)
-    pd = np.where(s.tf < bp, 0.5 * s.tf / bp, 0.5 + 0.5 * (s.tf - bp) / (1 - bp))
-    return s.band_limit(np.sin(2 * np.pi * pd)), f"bp {bp:.2f}"
+    w = s.sample(lambda t, tf: np.sin(2 * np.pi * np.where(
+        tf < bp, 0.5 * tf / bp, 0.5 + 0.5 * (tf - bp) / (1 - bp))))
+    return s.band_limit(w), f"bp {bp:.2f}"
 
 
 def _wtf_staircase(s, m, f0):
     lv = max(2, int(round(_wt_geom(32, 2, m))))
-    raw = np.round((2 * s.tf - 1) * (lv / 2)) / (lv / 2)
-    return s.band_limit(raw), f"{lv} levels"
+    w = s.sample(lambda t, tf: np.round((2 * tf - 1) * (lv / 2)) / (lv / 2))
+    return s.band_limit(w), f"{lv} levels"
 
 
 _WT_VOWELS = [

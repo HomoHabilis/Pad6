@@ -68,6 +68,8 @@ object Wavetable {
     val MAX_SEG_FRAMES = (MAX_SECONDS * SR).toInt() / SEGMENTS   // 1020
     const val PEAK = 0.9
     const val PREVIEW_SECONDS = 5.0
+    /** How much finer [WtSynth.sample] evaluates a time-domain family (WT_OVERSAMPLE). */
+    const val OVERSAMPLE = 16
     /** The P-6 transposes a sample at most three octaves above its own pitch. */
     const val DEVICE_MAX_UP = 36
     const val DRAW_POINTS = 512
