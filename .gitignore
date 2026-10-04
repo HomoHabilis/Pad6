@@ -5,3 +5,4 @@ __pycache__/
 .p6_preview_tmp.wav
 *_converted.wav
 *_converted_Hz.wav
+minifreak_wavetables/
