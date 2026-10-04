@@ -7,6 +7,7 @@ import io.github.pyp6.core.io.SafeName
 import io.github.pyp6.core.pattern.P6Pattern
 import io.github.pyp6.core.pattern.PatternRender
 import io.github.pyp6.core.prm.Prm
+import io.github.pyp6.core.wavetable.MiniFreak
 import io.github.pyp6.core.wavetable.Wavetable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -108,6 +109,34 @@ class GoldenTest {
                 if (d > worst) { worst = d; worstAt = i }
             }
             assertTrue("$name: largest difference $worst LSB at frame $worstAt (segment ${worstAt / r.meta.L})", worst <= 2)
+        }
+    }
+
+    @Test
+    fun miniFreakExportMatchesTheDesktopApp() {
+        val cases = golden["minifreak"]!!.jsonObject
+        for ((name, c0) in cases) {
+            val c = c0.jsonObject
+            val fams = c["families"]!!.jsonArray.map { Wavetable.Item.Builtin(it.jsonPrimitive.content) }
+            val frames = c["frames"]!!.let { if (it is JsonNull) null else it.jsonPrimitive.int }
+            val note = c["note"]!!.jsonPrimitive.content
+            val table = MiniFreak.build(fams, frames, note)
+            assertEquals("$name frames", c["count"]!!.jsonPrimitive.int, table.frames.size)
+            assertEquals("$name map", String(res("mf_$name.txt")), MiniFreak.map(table, note))
+
+            val want = res("mf_$name.wav")
+            val got = MiniFreak.wav(table)
+            assertEquals("$name size", want.size, got.size)
+            // Everything before the samples - RIFF, fmt, clm and data headers - byte for byte.
+            val head = want.size - table.frames.size * MiniFreak.FRAME * 3
+            for (i in 0 until head) assertEquals("$name header byte $i", want[i], got[i])
+            var worst = 0
+            for (i in head until want.size step 3) {
+                fun s24(b: ByteArray) = (b[i].toInt() and 0xFF) or ((b[i + 1].toInt() and 0xFF) shl 8) or (b[i + 2].toInt() shl 16)
+                worst = maxOf(worst, abs(s24(want) - s24(got)))
+            }
+            // 24-bit LSBs: 16 of them is still below one LSB of 16-bit audio.
+            assertTrue("$name: largest difference $worst LSB (24-bit)", worst <= 16)
         }
     }
 

@@ -77,6 +77,7 @@ import io.github.pyp6.app.ui.components.Section
 import io.github.pyp6.app.ui.components.MorphView
 import io.github.pyp6.app.ui.components.FamilyGrid
 import io.github.pyp6.core.model.PadRef
+import io.github.pyp6.core.wavetable.MiniFreak
 import io.github.pyp6.core.wavetable.WaveEntry
 import io.github.pyp6.core.wavetable.Wavetable
 import java.util.Locale
@@ -91,6 +92,14 @@ fun SynthScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
     val playback by vm.playback.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
     val cyclePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { sy.readCycles(it, vm) }
+    // The frame count chosen in the dialog, held until the file picker returns.
+    var exportFrames by remember { mutableStateOf<Int?>(null) }
+    var askFrames by remember { mutableStateOf(false) }
+    val mfSaver = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/wav")) { uri ->
+        val n = exportFrames
+        if (uri != null && n != null) sy.exportMiniFreak(uri, n, vm)
+        exportFrames = null
+    }
     val names = sy.activeNames()
 
     ScreenScaffold(
@@ -137,6 +146,9 @@ fun SynthScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                         Text("Build")
                     }
                 }
+                // A file for the Arturia MiniFreak, from the same selection; the pad is not touched.
+                OutlinedButton(onClick = { askFrames = true }, enabled = u.working == null && names.isNotEmpty(),
+                    modifier = Modifier.fillMaxWidth()) { Text("Export for MiniFreak…") }
             }
 
             Section("Morph", trailing = {
@@ -151,6 +163,12 @@ fun SynthScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
     }
 
     if (adding) FamilyPicker(sy, vm, library, u, onDismiss = { adding = false })
+    if (askFrames) MiniFreakDialog(
+        families = names.size,
+        initial = sy.miniFreakDefaultFrames(library),
+        onDismiss = { askFrames = false },
+        onExport = { n -> askFrames = false; exportFrames = n; mfSaver.launch(sy.miniFreakFileName()) },
+    )
     pending?.let { p -> CycleModeDialog(p, sy, vm) }
 }
 
@@ -315,6 +333,42 @@ private fun FamilyPicker(sy: SynthViewModel, vm: MainViewModel, library: Map<Str
             dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
         )
     }
+}
+
+/**
+ * Frame count for the MiniFreak export: at least one per family, at most 512.
+ * Past 189 - the most MiniFreak V is reported to handle - it says so and the
+ * button changes to "Export anyway", rather than refusing.
+ */
+@Composable
+private fun MiniFreakDialog(families: Int, initial: Int, onDismiss: () -> Unit, onExport: (Int) -> Unit) {
+    var text by remember { mutableStateOf(initial.toString()) }
+    val lo = maxOf(1, families)
+    val n = text.trim().toIntOrNull()
+    val valid = n != null && n in lo..MiniFreak.MAX_FRAMES
+    val risky = valid && n!! > MiniFreak.SAFE_FRAMES
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export for MiniFreak") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                MutedText("A 24-bit WAV of 512-point frames for the MiniFreak's Import (firmware 5.0+). " +
+                    "The frames are shared evenly between the $families famil${if (families == 1) "y" else "ies"}.")
+                OutlinedTextField(
+                    value = text, onValueChange = { v -> text = v.filter { it.isDigit() }.take(3) }, singleLine = true,
+                    label = { Text("Frames ($lo-${MiniFreak.MAX_FRAMES})") },
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
+                    isError = !valid, modifier = Modifier.fillMaxWidth(),
+                )
+                if (risky) Text("More than the ${MiniFreak.SAFE_FRAMES} frames MiniFreak V is reported to handle - longer tables have crashed it.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                else MutedText("${MiniFreak.SAFE_FRAMES} is the most reported to load safely.")
+            }
+        },
+        confirmButton = { TextButton(onClick = { onExport(n!!) }, enabled = valid) { Text(if (risky) "Export anyway" else "Export") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

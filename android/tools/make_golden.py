@@ -106,6 +106,27 @@ for name, sel, midi, cycles, up in cases:
                 "meta": meta, "desc": [r[3] for r in rows]}
 results["wavetables"] = wt
 
+# --- MiniFreak export ---------------------------------------------------------
+# The whole WAV as minifreak_export.py writes it, plus its frame map. The
+# exporter imports the engine itself; frames=None means its default.
+sys.path.insert(0, ROOT)
+import minifreak_export as mf  # noqa: E402
+
+mfr = {}
+mf_cases = [
+    ("basic", list(g["WT_SIMPLE_FAMILIES"]), None, "C3"),
+    ("big", ["Hot MW 1 Big 255WF"], None, "C3"),
+    ("mixed", ["Saw", "Hard Sync", "Hot MW 1 Big 255WF", "VC1 - No 01", "Vowel Formant"], 40, "A2"),
+]
+for name, sel, frames, note in mf_cases:
+    table, rows = mf.mf_build(sel, frames, note)
+    path = os.path.join(OUT, f"mf_{name}.wav")
+    mf.write_mf_wav(path, table)
+    mpath = os.path.join(OUT, f"mf_{name}.txt")
+    mf.write_mf_map(mpath, rows, len(table), note)
+    mfr[name] = {"families": sel, "frames": frames, "note": note, "count": len(table)}
+results["minifreak"] = mfr
+
 # --- patterns -----------------------------------------------------------------
 P6Pattern = g["P6Pattern"]
 blank = g["blank_pattern_text"]()

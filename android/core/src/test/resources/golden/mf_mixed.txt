@@ -1,0 +1,9 @@
+Pad6 MiniFreak wavetable - 40 frames x 512 points
+Formant reference pitch: A2
+
+frames      position  family                     starts as -> ends as
+  0-7         0.0%    Saw                        tilt k^-1.45 -> tilt k^-0.55
+  8-15       20.5%    Hard Sync                  ratio 1.00 -> ratio 6.00
+ 16-23       41.0%    Hot MW 1 Big 255WF         MICROW1 01 -> MICROW10 33
+ 24-31       61.5%    VC1 - No 01                VC1 - No 01 0.00 -> VC1 - No 01 1.00
+ 32-39       82.1%    Vowel Formant              A>E 0.00 -> O>U 1.00

@@ -839,6 +839,10 @@ ticked, a `.txt` saying which frames hold which family is written beside
 it - the MiniFreak shows a position, not a name. The root note voices the
 formant families (Vowel, Piano, Strings, Brass); nothing else depends on it.
 
+**On Android**, the Synth screen has the same **Export for MiniFreak...**
+button under the table: it asks for the frame count and where to save the
+WAV. It writes no frame map.
+
 **From the command line.** `minifreak_export.py`, next to `Pad6.py`, does
 the same in bulk. The button needs it too, so keep the two files together
 when running from source. Run it with the same Python environment as Pad6

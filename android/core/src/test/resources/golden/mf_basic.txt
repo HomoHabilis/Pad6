@@ -1,0 +1,20 @@
+Pad6 MiniFreak wavetable - 189 frames x 512 points
+Formant reference pitch: C3
+
+frames      position  family                     starts as -> ends as
+  0-11        0.0%    Saw                        tilt k^-1.45 -> tilt k^-0.55
+ 12-23        6.4%    Pulse / PWM                50.00% -> 1.50%
+ 24-35       12.8%    Triangle                   skew 0.50 -> skew 0.06
+ 36-47       19.1%    Sine                       stack 0.00 -> stack 1.00
+ 48-59       25.5%    Wave Folder                fold 1.00 -> fold 8.00
+ 60-71       31.9%    Hard Sync                  ratio 1.00 -> ratio 6.00
+ 72-83       38.3%    FM                         C:M 1:2 I=0.00 -> C:M 1:2 I=8.00
+ 84-95       44.7%    Phase Dist.                bp 0.50 -> bp 0.96
+ 96-107      51.1%    Staircase                  32 levels -> 2 levels
+108-119      57.4%    Vowel Formant              A>E 0.00 -> O>U 1.00
+120-131      63.8%    Organ                      drawbars 0.00 -> drawbars 1.00
+132-143      70.2%    Piano                      hardness 0.00 -> hardness 1.00
+144-155      76.6%    Strings                    bow 0.260 -> bow 0.055
+156-166      83.0%    Brass                      blow 0.00 -> blow 1.00
+167-177      88.8%    Bell / Metal               partials 0.00 -> partials 1.00
+178-188      94.7%    Noise Morph                3 harm -> 255 harm

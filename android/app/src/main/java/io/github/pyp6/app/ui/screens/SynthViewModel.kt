@@ -9,6 +9,7 @@ import io.github.pyp6.app.ui.MainViewModel
 import io.github.pyp6.core.audio.Audio
 import io.github.pyp6.core.model.PadRef
 import io.github.pyp6.core.model.WtConfig
+import io.github.pyp6.core.wavetable.MiniFreak
 import io.github.pyp6.core.wavetable.WaveEntry
 import io.github.pyp6.core.wavetable.Wavetable
 import io.github.pyp6.core.wavetable.WtBuildResult
@@ -228,6 +229,46 @@ class SynthViewModel(app: Application, val ref: PadRef) : AndroidViewModel(app) 
                 withContext(Dispatchers.IO) { vm.applyWavetable(ref, res, cfg) }
                 onDone()
             }
+        }
+    }
+
+    // --- MiniFreak export
+
+    /** The selection as the export sees it, resolved the same way a build resolves it. */
+    private fun items(lib: Map<String, WaveEntry>) = activeNames().map { item(it, lib) }
+
+    /** What the export dialog starts at: 189, or one frame per shape for a lone smaller multi family. */
+    fun miniFreakDefaultFrames(lib: Map<String, WaveEntry>): Int =
+        maxOf(activeNames().size, MiniFreak.defaultFrames(items(lib)))
+
+    /** Suggested file name: the set in Simple mode, the family or "Custom Selection" in Advanced. */
+    fun miniFreakFileName(): String {
+        val u = _ui.value
+        val label = if (u.simple) u.simpleSet else u.selection.singleOrNull() ?: "Custom Selection"
+        return MiniFreak.fileName(label) + ".wav"
+    }
+
+    /**
+     * Writes the current selection as a MiniFreak wavetable to [uri]. Only the
+     * file is written: the pad and its table stay as they are. The root note
+     * only voices the formant families (Vowel, Piano, Strings, Brass).
+     */
+    fun exportMiniFreak(uri: Uri, frames: Int, vm: MainViewModel) {
+        val lib = vm.library.value
+        val note = _ui.value.note
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(working = "Rendering MiniFreak wavetable …")
+            val r = withContext(Dispatchers.Default) {
+                runCatching {
+                    val bytes = MiniFreak.wav(MiniFreak.build(items(lib), frames, note))
+                    withContext(Dispatchers.IO) {
+                        getApplication<Application>().contentResolver.openOutputStream(uri, "wt")!!.use { it.write(bytes) }
+                    }
+                }
+            }
+            _ui.value = _ui.value.copy(working = null)
+            r.onFailure { vm.message(it.message ?: "Could not export the wavetable.", true) }
+            r.onSuccess { vm.message("Exported $frames frames for the MiniFreak.") }
         }
     }
 

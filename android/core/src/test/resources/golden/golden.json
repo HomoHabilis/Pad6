@@ -2187,6 +2187,51 @@
    ]
   }
  },
+ "minifreak": {
+  "basic": {
+   "families": [
+    "Saw",
+    "Pulse / PWM",
+    "Triangle",
+    "Sine",
+    "Wave Folder",
+    "Hard Sync",
+    "FM",
+    "Phase Dist.",
+    "Staircase",
+    "Vowel Formant",
+    "Organ",
+    "Piano",
+    "Strings",
+    "Brass",
+    "Bell / Metal",
+    "Noise Morph"
+   ],
+   "frames": null,
+   "note": "C3",
+   "count": 189
+  },
+  "big": {
+   "families": [
+    "Hot MW 1 Big 255WF"
+   ],
+   "frames": null,
+   "note": "C3",
+   "count": 189
+  },
+  "mixed": {
+   "families": [
+    "Saw",
+    "Hard Sync",
+    "Hot MW 1 Big 255WF",
+    "VC1 - No 01",
+    "Vowel Formant"
+   ],
+   "frames": 40,
+   "note": "A2",
+   "count": 40
+  }
+ },
  "pattern": {
   "length": 16,
   "tempo": 85.0,

@@ -1,0 +1,5 @@
+Pad6 MiniFreak wavetable - 189 frames x 512 points
+Formant reference pitch: C3
+
+frames      position  family                     starts as -> ends as
+  0-188       0.0%    Hot MW 1 Big 255WF         MICROW1 01 -> MICROW10 33
