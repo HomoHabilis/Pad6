@@ -123,7 +123,7 @@ workflow does all of this on every push that touches `android/`.
 
 ## License and thanks
 
-Same terms as the rest of the repository: see [LICENSE](../LICENSE) and
+MIT License, like the rest of the repository: see [LICENSE](../LICENSE) and
 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) for the libraries the
 APK contains. Thanks to the original
 [PyP6](https://github.com/j0kerpack/Roland-P6-sample-manager) project, which

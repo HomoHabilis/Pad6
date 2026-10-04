@@ -942,7 +942,7 @@ Notes:
 ## 8. Credits
 
 - Thanks to the original [PyP6](https://github.com/j0kerpack/Roland-P6-sample-manager)
-  project, which this one is built on.
+  project by **Brian Siemund**, which this one is built on.
 - Chop/multi-sample concept inspired by
   [p6-wave-slice](https://github.com/warreneblackwell/p6-wave-slice) by
   **Warren Blackwell**, a command-line utility that batch-processes WAV
@@ -952,10 +952,14 @@ Notes:
 
 ## 9. License
 
-See [LICENSE](LICENSE). This project is a modified version of the original
-PyP6, which was published without a license; the parts that come from it
-remain its author's. The libraries and tools the downloads bundle keep their
-own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+MIT License - see [LICENSE](LICENSE). Pad6 is a modified version of
+[PyP6](https://github.com/j0kerpack/Roland-P6-sample-manager) by Brian
+Siemund, who licensed it under MIT on 2026-09-30
+([discussion](https://github.com/j0kerpack/Roland-P6-sample-manager/discussions/2)).
+The whole project, original code and changes alike, is under that license.
+Releases published before then shipped an older, more restrictive LICENSE
+file; it no longer applies. The libraries and tools the downloads bundle keep
+their own licenses, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ---
 
