@@ -158,7 +158,8 @@ fun PyP6App(vm: MainViewModel, startRoute: String = TopLevel.PADS.route) {
             onDismissRequest = vm::dismissAlert,
             title = { Text(a.title) },
             text = { Text(a.text, modifier = Modifier.verticalScroll(rememberScrollState())) },
-            confirmButton = { TextButton(onClick = vm::dismissAlert) { Text("OK") } },
+            confirmButton = { TextButton(onClick = vm::confirmAlert) { Text(a.confirm) } },
+            dismissButton = if (a.onConfirm != null) ({ TextButton(onClick = vm::dismissAlert) { Text("Cancel") } }) else null,
         )
     }
 }

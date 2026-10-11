@@ -48,6 +48,7 @@ import io.github.pyp6.app.ui.components.ConfirmDialog
 import io.github.pyp6.app.ui.components.MutedText
 import io.github.pyp6.app.ui.components.ScreenScaffold
 import io.github.pyp6.app.ui.components.Section
+import io.github.pyp6.app.ui.components.SwitchRow
 import io.github.pyp6.app.ui.formatBytes
 import io.github.pyp6.app.ui.theme.PALETTES
 import io.github.pyp6.app.ui.theme.THEME_SYSTEM
@@ -86,6 +87,12 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                     }
                 }
                 MutedText("The eleven palettes of the desktop app; System follows your wallpaper colours (Material You).")
+            }
+
+            Section("Recording") {
+                SwitchRow("Normalize after recording", settings.normalizeRecordings,
+                    { on -> vm.updateSettings { it.copy(normalizeRecordings = on) } },
+                    supporting = "Raise each take to full level (peak at -0.2 dB) when it is put on a pad")
             }
 
             Section("Uploads") {

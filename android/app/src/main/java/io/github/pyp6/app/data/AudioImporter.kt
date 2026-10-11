@@ -35,6 +35,25 @@ class AudioImporter(private val context: Context, private val store: SampleStore
         return uri.lastPathSegment?.substringAfterLast('/') ?: "sample"
     }
 
+    /** The sample rate of [uri] without decoding it, or null when it cannot be told. */
+    fun sampleRate(uri: Uri): Int? {
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { return Wav.readInfo(it.buffered()).rate }
+        }
+        val ex = MediaExtractor()
+        return try {
+            ex.setDataSource(context, uri, null)
+            (0 until ex.trackCount).map { ex.getTrackFormat(it) }
+                .firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
+                ?.takeIf { it.containsKey(MediaFormat.KEY_SAMPLE_RATE) }
+                ?.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+        } catch (e: Exception) {
+            null
+        } finally {
+            ex.release()
+        }
+    }
+
     /** Decodes [uri] to memory. */
     fun decode(uri: Uri): Audio {
         runCatching {

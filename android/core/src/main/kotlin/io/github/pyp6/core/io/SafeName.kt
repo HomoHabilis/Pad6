@@ -17,7 +17,7 @@ object SafeName {
     )
     private val RESERVED = setOf("CON", "PRN", "AUX", "NUL") +
         (1..9).map { "COM$it" } + (1..9).map { "LPT$it" }
-    private val TEMP_TAG = Regex("""_(?:trim|norm|fade|fit|mono|imp|chop|conv|edit|wt)(?:_[A-H][1-6])?_[0-9a-f]{6,8}$""",
+    private val TEMP_TAG = Regex("""_(?:trim|norm|fade|fit|mono|imp|chop|conv|edit|wt|rec)(?:_[A-H][1-6])?_[0-9a-f]{6,8}$""",
         RegexOption.IGNORE_CASE)
 
     fun stem(fileName: String): String {

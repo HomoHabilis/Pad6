@@ -18,6 +18,8 @@ data class Settings(
     val defaultSlices: Int = 16,
     val storageWarningMb: Int = 10,
     val autoplay: Boolean = true,
+    /** Peak-normalise a recording when it is put on a pad. */
+    val normalizeRecordings: Boolean = true,
     val recentPresets: List<String> = emptyList(),
     val lastBank: Char = 'A',
 )
@@ -39,6 +41,7 @@ class AppSettings(context: Context) {
         defaultSlices = prefs.getInt("defaultSlices", 16),
         storageWarningMb = prefs.getInt("storageWarningMb", 10),
         autoplay = prefs.getBoolean("autoplay", true),
+        normalizeRecordings = prefs.getBoolean("normalizeRecordings", true),
         recentPresets = prefs.getString("recentPresets", "")!!.split('\n').filter { it.isNotBlank() },
         lastBank = (prefs.getString("lastBank", "A") ?: "A").firstOrNull() ?: 'A',
     )
@@ -55,6 +58,7 @@ class AppSettings(context: Context) {
             .putInt("defaultSlices", s.defaultSlices)
             .putInt("storageWarningMb", s.storageWarningMb)
             .putBoolean("autoplay", s.autoplay)
+            .putBoolean("normalizeRecordings", s.normalizeRecordings)
             .putString("recentPresets", s.recentPresets.joinToString("\n"))
             .putString("lastBank", s.lastBank.toString())
             .apply()
