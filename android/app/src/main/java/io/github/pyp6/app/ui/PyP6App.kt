@@ -102,7 +102,7 @@ fun PyP6App(vm: MainViewModel, startRoute: String = TopLevel.PADS.route) {
     LaunchedEffect(Unit) {
         vm.messages.collect {
             snackbar.showSnackbar(it.text, withDismissAction = it.error,
-                duration = if (it.error) SnackbarDuration.Long else SnackbarDuration.Short)
+                duration = if (it.error || it.text.length > 60) SnackbarDuration.Long else SnackbarDuration.Short)
         }
     }
 

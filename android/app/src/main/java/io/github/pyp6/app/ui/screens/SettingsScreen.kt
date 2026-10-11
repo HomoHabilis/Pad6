@@ -48,6 +48,12 @@ import io.github.pyp6.app.ui.components.ConfirmDialog
 import io.github.pyp6.app.ui.components.MutedText
 import io.github.pyp6.app.ui.components.ScreenScaffold
 import io.github.pyp6.app.ui.components.Section
+import io.github.pyp6.app.ui.components.SwitchRow
+import io.github.pyp6.app.ui.components.segColors
+import io.github.pyp6.app.data.MicMode
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import io.github.pyp6.app.ui.formatBytes
 import io.github.pyp6.app.ui.theme.PALETTES
 import io.github.pyp6.app.ui.theme.THEME_SYSTEM
@@ -86,6 +92,27 @@ fun SettingsScreen(vm: MainViewModel, nav: Nav) {
                     }
                 }
                 MutedText("The eleven palettes of the desktop app; System follows your wallpaper colours (Material You).")
+            }
+
+            Section("Recording") {
+                Text("Microphone", style = MaterialTheme.typography.bodyLarge)
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    MicMode.entries.forEachIndexed { i, m ->
+                        SegmentedButton(colors = segColors(), icon = {},
+                            selected = settings.micMode == m,
+                            onClick = { vm.updateSettings { it.copy(micMode = m) } },
+                            shape = SegmentedButtonDefaults.itemShape(i, MicMode.entries.size),
+                            label = { Text(m.label, maxLines = 1) })
+                    }
+                }
+                MutedText(when (settings.micMode) {
+                    MicMode.STANDARD -> "The phone's own tuning for recording: the loudest on most phones."
+                    MicMode.FLAT -> "Flat response without automatic gain; the level depends on the phone."
+                    MicMode.RAW -> "No processing at all: the cleanest signal, but often much quieter. Best with Normalize on."
+                })
+                SwitchRow("Normalize after recording", settings.normalizeRecordings,
+                    { on -> vm.updateSettings { it.copy(normalizeRecordings = on) } },
+                    supporting = "Raise each take to full level (peak at -0.2 dB) when it is put on a pad")
             }
 
             Section("Uploads") {

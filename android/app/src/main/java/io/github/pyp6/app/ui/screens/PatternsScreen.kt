@@ -63,6 +63,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import io.github.pyp6.app.ui.components.ConfirmDialog
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -121,13 +125,23 @@ fun PatternsScreen(vm: MainViewModel, nav: Nav) {
     var loading by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var moving by remember { mutableStateOf(false) }
+    val pats = project.patterns
+    var dragCopy by rememberSaveable { mutableStateOf(false) }
+    // A copy waiting for the user to accept overwriting a pattern that has notes: from to target.
+    var overwrite by remember { mutableStateOf<Pair<PatternSlot, PatternSlot>?>(null) }
+    fun copyOrConfirm(from: PatternSlot, to: PatternSlot) {
+        when {
+            pats[from] == null -> vm.message("Slot ${from.label} has no pattern to copy.", error = true)
+            pats[to]?.isEmpty == false -> overwrite = from to to
+            else -> vm.copyPattern(from, to)
+        }
+    }
     val folderLoad = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let(vm::loadPatternsFromFolder) }
     var saveFolderPlan by remember { mutableStateOf<Pair<android.net.Uri, P6Drive.PatternSavePlan?>?>(null) }
     val scope = rememberCoroutineScope()
     val folderSave = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         uri?.let { scope.launch { saveFolderPlan = it to vm.patternSavePlan(false, it) } }
     }
-    val pats = project.patterns
     LaunchedEffect(pats.isEmpty()) {
         if (selected == null) pats.entries.firstOrNull { !it.value.isEmpty }?.key?.let { vm.selectPattern(it); bank = it.bank }
     }
@@ -157,7 +171,9 @@ fun PatternsScreen(vm: MainViewModel, nav: Nav) {
             SwitchRow("Sync patterns with pad moves", settings.patternSync, vm::setPatternSync,
                 supporting = "Swapping pads or banks rewrites the patterns so they keep playing the same samples")
 
-            PatternGrid(vm, pats, bank, { bank = it }, selected, linked, preview?.slot, project)
+            PatternGrid(vm, pats, bank, { bank = it }, selected, linked, preview?.slot, project,
+                copyMode = dragCopy, onCopyMode = { dragCopy = it },
+                onDrop = { f, t -> if (dragCopy) copyOrConfirm(f, t) else vm.swapPatterns(f, t) })
 
             val sel = selected
             if (sel != null) {
@@ -222,7 +238,25 @@ fun PatternsScreen(vm: MainViewModel, nav: Nav) {
             dismissButton = { TextButton(onClick = { saveFolderPlan = null }) { Text("Cancel") } },
         )
     }
-    if (moving && selected != null) SlotPickerDialog(selected!!, pats, onDismiss = { moving = false }) { t -> vm.swapPatterns(selected!!, t); moving = false }
+    if (moving && selected != null) {
+        val here = selected!!
+        // An empty slot pulls the picked pattern in; a filled one sends its own out.
+        val into = pats[here] == null
+        SlotPickerDialog(here, pats, into, onDismiss = { moving = false }) { t, copy ->
+            when {
+                !copy -> vm.swapPatterns(here, t)
+                into -> vm.copyPattern(t, here)
+                else -> { copyOrConfirm(here, t); bank = t.bank }
+            }
+            moving = false
+        }
+    }
+    overwrite?.let { (f, t) ->
+        val n = pats[t]?.noteCount ?: 0
+        ConfirmDialog("Overwrite pattern ${t.label}?",
+            "Pattern ${t.label} has $n note${if (n != 1) "s" else ""}. Copying ${f.label} there replaces it (Undo brings it back).",
+            "Overwrite", onDismiss = { overwrite = null }, onConfirm = { vm.copyPattern(f, t) }, destructive = true)
+    }
 }
 
 @Composable
@@ -239,6 +273,7 @@ private fun PlanText(plan: P6Drive.PatternSavePlan) {
 private fun PatternGrid(
     vm: MainViewModel, pats: Map<PatternSlot, P6Pattern>, bank: Int, onBank: (Int) -> Unit,
     selected: PatternSlot?, linked: Set<PatternSlot>, playing: PatternSlot?, project: Project,
+    copyMode: Boolean, onCopyMode: (Boolean) -> Unit, onDrop: (PatternSlot, PatternSlot) -> Unit,
 ) {
     // The 16 tiles by grid position, not by slot: switching the pattern bank
     // puts other slots at the same places without moving (or re-reporting)
@@ -253,6 +288,10 @@ private fun PatternGrid(
         ?.let { PatternSlot(currentBank, it.key + 1) }
     val target = dragFrom?.let { f -> slotAt(dragPos)?.takeIf { it != f } }
     Section("Pattern bank") {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Drag to", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 8.dp))
+            SwapCopyToggle(copyMode, onCopyMode, modifier = Modifier.weight(1f))
+        }
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
             (1..PatternSlot.BANKS).forEach { b ->
                 val n = linked.count { it.bank == b }
@@ -278,14 +317,15 @@ private fun PatternGrid(
                         onDragEnd = {
                             val f = dragFrom
                             val t = slotAt(dragPos)
-                            if (f != null && t != null && t != f) vm.swapPatterns(f, t)
+                            if (f != null && t != null && t != f) onDrop(f, t)
                             dragFrom = null
                         },
                     )
                 }
             }
         }
-        MutedText("Tap to select · double-tap to play · long-press and drag onto another slot to swap (an empty slot: move). " +
+        MutedText("Tap to select · double-tap to play · long-press and drag onto another slot to " +
+            (if (copyMode) "copy it there (replacing what is there). " else "swap (an empty slot: move). ") +
             "A dashed slot has no file, so a restore leaves the P-6's own pattern there.")
     }
 }
@@ -336,16 +376,7 @@ private fun PatternTile(
             val w = if (selected || playing || target) 2.5.dp.toPx() else 1.dp.toPx()
             drawRoundRect(outline, style = Stroke(w, pathEffect = if (pat == null) PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) else null),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()))
-            // A bar of the steps that hold notes.
-            if (pat != null && !pat.isEmpty) {
-                val n = pat.length.coerceAtLeast(1)
-                val bw = (size.width - 12.dp.toPx()) / n
-                for (i in 0 until n) {
-                    if (pat.stepParts.getOrNull(i)?.isNotEmpty() == true || (pat.stepGranular.getOrNull(i) ?: 0) > 0) {
-                        drawRect(pc.wave, Offset(6.dp.toPx() + i * bw, size.height - 9.dp.toPx()), Size(bw.coerceAtLeast(1f), 4.dp.toPx()))
-                    }
-                }
-            }
+            if (pat != null) drawStepBar(pat, pc.wave)
         }
         Column(Modifier.padding(start = 6.dp, top = 4.dp, end = 4.dp, bottom = 14.dp)) {
             Text(slot.number.toString().padStart(2, '0'), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge,
@@ -368,7 +399,7 @@ private fun PatternCard(
             MutedText("No file for this slot. A restore leaves whatever the P-6 has here. Clear creates an empty pattern, which does overwrite it.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { vm.clearPattern(slot) }, Modifier.weight(1f)) { Text("Create empty") }
-                OutlinedButton(onClick = onMove, Modifier.weight(1f)) { Text("Move here…") }
+                OutlinedButton(onClick = onMove, Modifier.weight(1f)) { Text("Move / copy…", maxLines = 1) }
             }
             return@Section
         }
@@ -411,13 +442,16 @@ private fun PatternCard(
                 if (p.granularCount > 0) Tag("Granular ×${p.granularCount} (${Parts.padName(p.granularSource)})", pc.mono)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.togglePatternPreview(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Play takes what the other two leave: their labels are fixed, and at large
+            // text sizes three equal thirds cut "Move/copy…" and wrap "Play".
+            val tight = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+            Button(onClick = { vm.togglePatternPreview(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f), contentPadding = tight) {
                 Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, null)
-                Spacer(Modifier.width(4.dp)); Text(if (playing) "Stop" else "Play")
+                Spacer(Modifier.width(4.dp)); Text(if (playing) "Stop" else "Play", maxLines = 1)
             }
-            FilledTonalButton(onClick = { vm.clearPattern(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f)) { Text("Clear") }
-            OutlinedButton(onClick = onMove, modifier = Modifier.weight(1f)) { Text("Move…") }
+            FilledTonalButton(onClick = { vm.clearPattern(slot) }, enabled = !p.isEmpty, contentPadding = tight) { Text("Clear", maxLines = 1) }
+            OutlinedButton(onClick = onMove, contentPadding = tight) { Text("Move/copy…", maxLines = 1) }
         }
         MutedText("Plays in a loop with the samples on the pads right now - to recognise the pattern, not to reproduce the P-6: no filter, effects or knob motion.")
     }
@@ -493,27 +527,41 @@ private fun PadMap(vm: MainViewModel, project: Project, pattern: P6Pattern?, foc
 }
 
 @Composable
-private fun SlotPickerDialog(from: PatternSlot, pats: Map<PatternSlot, P6Pattern>, onDismiss: () -> Unit, onPick: (PatternSlot) -> Unit) {
+private fun SlotPickerDialog(
+    from: PatternSlot, pats: Map<PatternSlot, P6Pattern>, into: Boolean,
+    onDismiss: () -> Unit, onPick: (PatternSlot, copy: Boolean) -> Unit,
+) {
     var bank by remember { mutableIntStateOf(from.bank) }
+    var copy by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Swap ${from.label} with") },
+        title = { Text(when {
+            !copy -> "Swap ${from.label} with"
+            into -> "Copy into ${from.label} from"
+            else -> "Copy ${from.label} to"
+        }) },
         text = {
             Column {
+                SwapCopyToggle(copy, { copy = it }, swapLabel = if (into) "Move" else "Swap")
+                Spacer(Modifier.height(8.dp))
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     (1..4).forEach { b -> SegmentedButton(colors = io.github.pyp6.app.ui.components.segColors(), icon = {}, selected = bank == b, onClick = { bank = b }, shape = SegmentedButtonDefaults.itemShape(b - 1, 4)) { Text("$b") } }
                 }
                 Spacer(Modifier.height(8.dp))
-                for (r in 0 until 4) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    for (c in 0 until 4) {
-                        val s = PatternSlot(bank, r * 4 + c + 1)
-                        OutlinedButton(onClick = { onPick(s) }, enabled = s != from, modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
-                            Text(s.number.toString().padStart(2, '0'), fontWeight = if (pats[s] != null) FontWeight.Bold else FontWeight.Normal)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (r in 0 until 4) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        for (c in 0 until 4) {
+                            val s = PatternSlot(bank, r * 4 + c + 1)
+                            MiniSlot(s, pats[s], enabled = s != from && !(copy && into && pats[s] == null), isSource = s == from,
+                                modifier = Modifier.weight(1f)) { onPick(s, copy) }
                         }
                     }
                 }
-                MutedText("Bold slots hold a pattern; picking an empty one moves it.", Modifier.padding(top = 8.dp))
+                MutedText(when {
+                    !copy -> "Tinted slots hold a pattern (notes and a bar of its steps); a dashed one has no file. Picking an empty slot moves it."
+                    into -> "Pick the pattern to copy into ${from.label}. Undo brings the slot back."
+                    else -> "The slot you pick gets a copy of ${from.label}, replacing what is there. Undo brings it back."
+                }, Modifier.padding(top = 8.dp))
             }
         },
         confirmButton = {},
@@ -521,3 +569,52 @@ private fun SlotPickerDialog(from: PatternSlot, pats: Map<PatternSlot, P6Pattern
     )
 }
 
+
+/** A bar along the bottom of a tile, lit at the steps that hold notes. */
+private fun DrawScope.drawStepBar(pat: P6Pattern, color: Color) {
+    if (pat.isEmpty) return
+    val n = pat.length.coerceAtLeast(1)
+    val bw = (size.width - 12.dp.toPx()) / n
+    for (i in 0 until n) {
+        if (pat.stepParts.getOrNull(i)?.isNotEmpty() == true || (pat.stepGranular.getOrNull(i) ?: 0) > 0) {
+            drawRect(color, Offset(6.dp.toPx() + i * bw, size.height - 9.dp.toPx()), Size(bw.coerceAtLeast(1f), 4.dp.toPx()))
+        }
+    }
+}
+
+/** A slot in the Move/copy picker, drawn like the grid's tiles: dashed when it has no file, a bar of notes when it has some. */
+@Composable
+private fun MiniSlot(slot: PatternSlot, pat: P6Pattern?, enabled: Boolean, isSource: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val pc = LocalPyP6Colors.current
+    // Tinted when it has notes, plain with a solid outline when the file is empty, dashed when there is no file:
+    // the dialog sits on a surface colour, so the grid's greys alone would barely show.
+    val outline = when {
+        isSource -> MaterialTheme.colorScheme.primary
+        pat == null -> MaterialTheme.colorScheme.outlineVariant
+        else -> MaterialTheme.colorScheme.outline
+    }
+    val bg = when {
+        isSource -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+        pat == null || pat.isEmpty -> Color.Transparent
+        else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+    }
+    Box(
+        modifier.height(54.dp).alpha(if (enabled || isSource) 1f else 0.35f)
+            .clip(RoundedCornerShape(8.dp)).background(bg)
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics { contentDescription = "Pattern ${slot.label}: " + (pat?.let { if (it.isEmpty) "empty" else "${it.noteCount} notes" } ?: "no file") },
+    ) {
+        Canvas(Modifier.matchParentSize()) {
+            drawRoundRect(outline, style = Stroke(if (isSource) 2.dp.toPx() else 1.dp.toPx(),
+                pathEffect = if (pat == null) PathEffect.dashPathEffect(floatArrayOf(8f, 6f)) else null),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()))
+            if (pat != null) drawStepBar(pat, pc.wave)
+        }
+        Column(Modifier.padding(start = 6.dp, top = 3.dp)) {
+            Text(slot.number.toString().padStart(2, '0'), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge,
+                color = if (pat == null || pat.isEmpty) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
+            if (pat != null) Text(if (pat.isEmpty) "empty" else "${pat.noteCount}", fontSize = 10.sp, lineHeight = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}

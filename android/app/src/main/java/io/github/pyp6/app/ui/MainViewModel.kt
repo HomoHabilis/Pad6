@@ -12,6 +12,8 @@ import io.github.pyp6.core.P6
 import io.github.pyp6.core.audio.Audio
 import io.github.pyp6.core.audio.Wav
 import io.github.pyp6.core.device.P6Drive
+import io.github.pyp6.core.dsp.Edit
+import io.github.pyp6.core.dsp.Resampler
 import io.github.pyp6.core.io.SafeName
 import io.github.pyp6.core.io.FileNode
 import io.github.pyp6.core.io.VNode
@@ -138,20 +140,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Loads [uris] onto [ref]; several files fill the following pads of the
      * bank in order, like dropping several files on the desktop app.
+     *
+     * Files at a rate the P-6 does not play (48 kHz above all) are resampled
+     * to [P6.defaultRateFor] as they load, and the message says so.
      */
     fun loadSamples(ref: PadRef, uris: List<Uri>) {
         if (uris.isEmpty()) return
         work("Loading …") {
             val loaded = ArrayList<Pair<PadRef, PadState>>()
             val failed = ArrayList<String>()
+            val converted = ArrayList<Pair<Int, Int>>()
             var pad = ref.pad
             for (uri in uris) {
                 if (pad > P6.PADS.size) break
                 val name = c.importer.displayName(uri)
                 _busy.value = "Loading $name"
                 try {
-                    val (file, converted) = c.importer.import(uri)
-                    val state = c.store.newPadState(file, if (converted) "$name" else name)
+                    var (file, _) = c.importer.import(uri)
+                    val rate = Wav.readInfo(file).rate
+                    if (rate !in P6.TARGET_RATES) {
+                        _busy.value = "Converting $name to ${P6.defaultRateFor(rate)} Hz"
+                        val resampled = Resampler.resample(Wav.read(file), P6.defaultRateFor(rate))
+                        file.delete()
+                        file = c.store.write(resampled, name, "conv")
+                        converted.add(rate to P6.defaultRateFor(rate))
+                    }
+                    val state = c.store.newPadState(file, name)
                     loaded.add(PadRef(ref.bank, pad) to state)
                     pad++
                 } catch (e: Exception) {
@@ -161,13 +175,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (loaded.isNotEmpty()) {
                 repo.update { p -> loaded.fold(p) { acc, (r, s) -> acc.withPad(r, s) } }
                 val extra = uris.size - loaded.size - failed.size
+                val conv = when {
+                    converted.isEmpty() -> ""
+                    converted.size == 1 -> " Converted from ${converted[0].first} to ${converted[0].second} Hz (the P-6 does not play ${converted[0].first} Hz)."
+                    else -> " ${converted.size} converted to a P-6 rate (" +
+                        converted.distinct().joinToString(", ") { (a, b) -> "$a\u2192$b Hz" } + ")."
+                }
                 message(
-                    if (loaded.size == 1) "${loaded[0].second.name} loaded on ${loaded[0].first.label}."
+                    (if (loaded.size == 1) "${loaded[0].second.name} loaded on ${loaded[0].first.label}."
                     else "${loaded.size} samples loaded from ${loaded.first().first.label}." +
-                        if (extra > 0) " $extra did not fit in the bank." else ""
+                        if (extra > 0) " $extra did not fit in the bank." else "") + conv
                 )
             }
             if (failed.isNotEmpty()) showAlert("Some files could not be loaded", failed.joinToString("\n"))
+        }
+    }
+
+    // --- recording
+
+    val recording = c.recorder.state
+
+    /** Starts recording from the microphone; playback stops so it is not picked up. */
+    fun startRecording(): Boolean {
+        c.player.stop()
+        stopPatternPreview()
+        val err = c.recorder.start(settings.value.micMode) ?: return true
+        message(err, error = true)
+        return false
+    }
+
+    fun cancelRecording() = c.recorder.cancel()
+
+    /** Stops recording and puts the take on [ref], replacing what is there (Undo brings it back). */
+    fun stopRecording(ref: PadRef) {
+        val audio = c.recorder.stop()
+        if (audio == null || audio.frames == 0) { message("Nothing was recorded.", error = true); return }
+        val normalize = settings.value.normalizeRecordings
+        work("Saving recording …") {
+            val name = "REC_${ref.bank}${ref.pad}"
+            val file = c.store.write(if (normalize) Edit.normalize(audio) else audio, name, "rec")
+            val state = c.store.newPadState(file, name)
+            repo.update { it.withPad(ref, state) }
+            message(String.format(java.util.Locale.ROOT, "%.1f s recorded on %s.", audio.durationSeconds, ref.label))
         }
     }
 
@@ -231,6 +280,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         var changed = 0
         repo.update { p -> p.swapPads(a, b, settings.value.patternSync).also { changed = it.second }.first }
         message("Swapped ${a.label} and ${b.label}." + patternsNote(changed))
+    }
+
+    /** Copies pad [from] onto [to], replacing whatever [to] held. Patterns are left alone: nothing moved. */
+    fun copyPad(from: PadRef, to: PadRef) {
+        if (from == to) return
+        val st = project.value.pad(from) ?: return
+        c.player.stop()
+        work("Copying pad …") {
+            // A wavetable gets its own WAV and .PRM, and the .PRM is renumbered for the
+            // new pad: one shared file would carry only one pad number.
+            val copy = c.store.duplicateForCopy(st).copy(from_sync = false)
+            copy.wavetable?.let { if (copy.filepath != st.filepath) writeWavetablePrm(copy, to, it) }
+            repo.update { it.withPad(to, copy) }
+            message("Copied ${from.label} to ${to.label}.")
+        }
     }
 
     fun swapBanks(a: Char, b: Char) {
@@ -505,6 +569,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         message(if (pb == null) "Moved pattern ${a.label} to ${b.label}." else "Swapped patterns ${a.label} and ${b.label}.")
     }
 
+    /** Copies pattern [from] into slot [to], replacing what was there. */
+    fun copyPattern(from: PatternSlot, to: PatternSlot) {
+        if (from == to) return
+        val pat = project.value.patterns[from] ?: return
+        stopPatternPreview()
+        // P6Pattern is immutable, so both slots can hold the same object.
+        repo.update { it.copy(patterns = (it.patterns + (to to pat)).toSortedMap(), patternsDirty = true) }
+        _selectedPattern.value = to
+        message("Copied pattern ${from.label} to ${to.label}.")
+    }
+
     fun togglePatternPreview(slot: PatternSlot) {
         if (_preview.value?.slot == slot) stopPatternPreview() else startPatternPreview(slot)
     }
@@ -666,6 +741,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         c.player.stop()
+        c.recorder.cancel()
         super.onCleared()
     }
 }

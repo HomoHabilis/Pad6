@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +60,7 @@ import io.github.pyp6.app.ui.Routes
 import io.github.pyp6.app.ui.components.WavetableLabel
 import io.github.pyp6.app.ui.components.MiniWave
 import io.github.pyp6.app.ui.components.MutedText
+import io.github.pyp6.app.ui.components.ConfirmDialog
 import io.github.pyp6.app.ui.components.ScreenScaffold
 import io.github.pyp6.app.ui.components.rememberOverFraction
 import io.github.pyp6.app.ui.components.rememberSummary
@@ -78,6 +80,8 @@ private sealed class Drag {
  * All 48 pads at once. Tap plays, double-tap opens the pad; long-press and
  * drag moves a pad onto another pad (they swap, across banks too), or a
  * bank letter onto another bank (the banks swap, Force Mono included).
+ * With the Copy toggle on, a drop copies instead, and asks first when the
+ * target already holds something.
  */
 @Composable
 fun OverviewScreen(vm: MainViewModel, nav: Nav) {
@@ -93,6 +97,16 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
     var drag by remember { mutableStateOf<Drag?>(null) }
     var dragPos by remember { mutableStateOf(Offset.Zero) }
     var rootOffset by remember { mutableStateOf(Offset.Zero) }
+    var copyMode by rememberSaveable { mutableStateOf(false) }
+    // A copy waiting for the user to accept overwriting what the target holds.
+    var overwrite by remember { mutableStateOf<Pair<Drag, Any>?>(null) }
+
+    fun copyPad(from: PadRef, to: PadRef) {
+        if (project.pad(to) != null) overwrite = Drag.PadDrag(from) to to else vm.copyPad(from, to)
+    }
+    fun copyBank(from: Char, to: Char) {
+        if (project.bank(to).hasSamples) overwrite = Drag.BankDrag(from) to to else vm.transferBank(from, to, move = false)
+    }
 
     fun <K> Map<K, LayoutCoordinates>.at(pos: Offset): K? =
         entries.firstOrNull { (_, c) -> c.isAttached && c.boundsInRoot().contains(pos) }?.key
@@ -113,7 +127,12 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState(), enabled = drag == null).padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                MutedText("Tap to play · double-tap to open · long-press and drag a pad onto another to swap them, or a bank letter onto another bank.")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Drag to", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 8.dp))
+                    SwapCopyToggle(copyMode, { copyMode = it }, modifier = Modifier.weight(1f))
+                }
+                MutedText("Tap to play · double-tap to open · long-press and drag a pad onto another, or a bank letter onto another bank, to " +
+                    if (copyMode) "copy it there (replacing what is there)." else "swap them.")
                 P6.BANKS.forEach { b ->
                     BankRow(
                         b, project, playback?.id, focus,
@@ -127,10 +146,10 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
                         onDragEnd = {
                             when (val d = drag) {
                                 is Drag.PadDrag -> cells.at(dragPos)?.let { t ->
-                                    if (t != d.from) vm.swapPads(d.from, t)
+                                    if (t != d.from) { if (copyMode) copyPad(d.from, t) else vm.swapPads(d.from, t) }
                                 }
                                 is Drag.BankDrag -> rows.at(dragPos)?.let { t ->
-                                    if (t != d.from) vm.swapBanks(d.from, t)
+                                    if (t != d.from) { if (copyMode) copyBank(d.from, t) else vm.swapBanks(d.from, t) }
                                 }
                                 null -> {}
                             }
@@ -142,8 +161,8 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
             drag?.let { d ->
                 val density = LocalDensity.current
                 val label = when (d) {
-                    is Drag.PadDrag -> "${d.from.label} ${project.pad(d.from)?.name ?: ""}"
-                    is Drag.BankDrag -> "Bank ${d.from}"
+                    is Drag.PadDrag -> (if (copyMode) "Copy " else "") + "${d.from.label} ${project.pad(d.from)?.name ?: ""}"
+                    is Drag.BankDrag -> (if (copyMode) "Copy bank " else "Bank ") + d.from
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.primary, shadowElevation = 8.dp,
@@ -155,6 +174,22 @@ fun OverviewScreen(vm: MainViewModel, nav: Nav) {
                     Text(label, color = MaterialTheme.colorScheme.onPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp).width(120.dp))
                 }
+            }
+        }
+    }
+
+    overwrite?.let { (d, t) ->
+        when (d) {
+            is Drag.PadDrag -> (t as PadRef).let { to ->
+                ConfirmDialog("Overwrite ${to.label}?",
+                    "${to.label} holds ${project.pad(to)?.name ?: "a sample"}. Copying ${d.from.label} there replaces it (Undo brings it back).",
+                    "Overwrite", onDismiss = { overwrite = null }, onConfirm = { vm.copyPad(d.from, to) }, destructive = true)
+            }
+            is Drag.BankDrag -> (t as Char).let { to ->
+                val n = project.bank(to).pads.count { it != null }
+                ConfirmDialog("Overwrite bank $to?",
+                    "Bank $to holds $n sample${if (n != 1) "s" else ""}. Copying bank ${d.from} there replaces all of them (Undo brings them back).",
+                    "Overwrite", onDismiss = { overwrite = null }, onConfirm = { vm.transferBank(d.from, to, move = false) }, destructive = true)
             }
         }
     }
@@ -191,7 +226,7 @@ private fun BankRow(
                         onDragEnd = { end() }, onDragCancel = { end() },
                     )
                 }
-                .semantics { contentDescription = "Bank $bank. Long-press and drag onto another bank to swap." },
+                .semantics { contentDescription = "Bank $bank. Long-press and drag onto another bank to swap or copy." },
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
