@@ -37,6 +37,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -174,8 +177,9 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                     OutlinedButton(onClick = { picker.launch(arrayOf("audio/*")) }, Modifier.weight(1f)) {
                         Text("Replace")
                     }
-                    OutlinedButton(onClick = { swapping = true }, Modifier.weight(1f)) {
-                        Text("Swap / copy\u2026", maxLines = 1)
+                    OutlinedButton(onClick = { swapping = true }, Modifier.weight(1f),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) {
+                        Text("Swap/copy\u2026", maxLines = 1)
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -311,12 +315,12 @@ fun PadPickerDialog(
 /** Swap or Copy, at the top of the pad and pattern pickers: one button opens both, so neither screen grows a row. */
 @Composable
 fun SwapCopyToggle(copy: Boolean, onChange: (Boolean) -> Unit, swapLabel: String = "Swap") {
-    androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
         listOf(false to swapLabel, true to "Copy").forEachIndexed { i, (isCopy, label) ->
-            androidx.compose.material3.SegmentedButton(
+            SegmentedButton(
                 colors = io.github.pyp6.app.ui.components.segColors(), icon = {},
                 selected = copy == isCopy, onClick = { onChange(isCopy) },
-                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(i, 2),
+                shape = SegmentedButtonDefaults.itemShape(i, 2),
             ) { Text(label) }
         }
     }

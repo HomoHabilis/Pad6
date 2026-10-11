@@ -423,14 +423,16 @@ private fun PatternCard(
                 if (p.granularCount > 0) Tag("Granular ×${p.granularCount} (${Parts.padName(p.granularSource)})", pc.mono)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.togglePatternPreview(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Play takes what the other two leave: their labels are fixed, and at large
+            // text sizes three equal thirds cut "Move/copy…" and wrap "Play".
+            val tight = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+            Button(onClick = { vm.togglePatternPreview(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f), contentPadding = tight) {
                 Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, null)
-                Spacer(Modifier.width(4.dp)); Text(if (playing) "Stop" else "Play")
+                Spacer(Modifier.width(4.dp)); Text(if (playing) "Stop" else "Play", maxLines = 1)
             }
-            FilledTonalButton(onClick = { vm.clearPattern(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f)) { Text("Clear") }
-            OutlinedButton(onClick = onMove, modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)) { Text("Move/copy…", maxLines = 1) }
+            FilledTonalButton(onClick = { vm.clearPattern(slot) }, enabled = !p.isEmpty, contentPadding = tight) { Text("Clear", maxLines = 1) }
+            OutlinedButton(onClick = onMove, contentPadding = tight) { Text("Move/copy…", maxLines = 1) }
         }
         MutedText("Plays in a loop with the samples on the pads right now - to recognise the pattern, not to reproduce the P-6: no filter, effects or knob motion.")
     }
