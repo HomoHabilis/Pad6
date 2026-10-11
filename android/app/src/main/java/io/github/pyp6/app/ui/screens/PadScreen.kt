@@ -60,6 +60,7 @@ import io.github.pyp6.app.ui.Nav
 import io.github.pyp6.app.ui.Routes
 import io.github.pyp6.app.ui.components.WavetableLabel
 import io.github.pyp6.app.ui.components.CheckRow
+import io.github.pyp6.app.ui.components.ConfirmDialog
 import io.github.pyp6.app.ui.components.MiniWave
 import io.github.pyp6.app.ui.components.MutedText
 import io.github.pyp6.app.ui.components.PitchControl
@@ -93,6 +94,7 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
     val bankMono = project.bank(ref.bank).forceMono
     val scope = rememberCoroutineScope()
     var swapping by remember { mutableStateOf(false) }
+    var overwrite by remember { mutableStateOf<PadRef?>(null) }
     var ejecting by remember { mutableStateOf<List<String>?>(null) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.loadSamples(ref, uris)
@@ -218,13 +220,23 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
             exclude = ref,
             project = project,
             onDismiss = { swapping = false },
-            onPick = { if (copy) vm.copyPad(ref, it) else vm.swapPads(ref, it); swapping = false },
+            onPick = {
+                if (!copy) vm.swapPads(ref, it)
+                else if (project.pad(it) != null) overwrite = it
+                else vm.copyPad(ref, it)
+                swapping = false
+            },
             header = {
                 SwapCopyToggle(copy, { copy = it })
                 MutedText(if (copy) "The pad you pick gets a copy of ${ref.label}, replacing what is there. Undo brings it back."
                     else "The two pads trade places.", Modifier.padding(top = 6.dp))
             },
         )
+    }
+    overwrite?.let { t ->
+        ConfirmDialog("Overwrite ${t.label}?",
+            "${t.label} holds ${project.pad(t)?.name ?: "a sample"}. Copying ${ref.label} there replaces it (Undo brings it back).",
+            "Overwrite", onDismiss = { overwrite = null }, onConfirm = { vm.copyPad(ref, t) }, destructive = true)
     }
     ejecting?.let { files ->
         var alsoDevice by remember { mutableStateOf(false) }
@@ -324,8 +336,8 @@ fun PadPickerDialog(
 
 /** Swap or Copy, at the top of the pad and pattern pickers: one button opens both, so neither screen grows a row. */
 @Composable
-fun SwapCopyToggle(copy: Boolean, onChange: (Boolean) -> Unit, swapLabel: String = "Swap") {
-    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+fun SwapCopyToggle(copy: Boolean, onChange: (Boolean) -> Unit, swapLabel: String = "Swap", modifier: Modifier = Modifier.fillMaxWidth()) {
+    SingleChoiceSegmentedButtonRow(modifier) {
         listOf(false to swapLabel, true to "Copy").forEachIndexed { i, (isCopy, label) ->
             SegmentedButton(
                 colors = io.github.pyp6.app.ui.components.segColors(), icon = {},
