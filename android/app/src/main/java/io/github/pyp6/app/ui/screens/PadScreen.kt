@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Eject
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -66,6 +67,7 @@ import io.github.pyp6.app.ui.components.SwitchRow
 import io.github.pyp6.app.ui.components.FamilyGrid
 import io.github.pyp6.app.ui.components.rememberOverFraction
 import io.github.pyp6.app.ui.components.rememberSummary
+import io.github.pyp6.app.ui.components.rememberRecordAction
 import io.github.pyp6.app.ui.formatBytes
 import io.github.pyp6.app.ui.theme.LocalPyP6Colors
 import io.github.pyp6.core.P6
@@ -92,6 +94,7 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.loadSamples(ref, uris)
     }
+    val record = rememberRecordAction(vm)
     val playing = playback?.takeIf { it.id == vm.padPlaybackId(ref) }
 
     ScreenScaffold(
@@ -105,10 +108,15 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
         ) {
             if (st == null) {
                 Section("Empty pad") {
-                    MutedText("Load a WAV, MP3, FLAC, M4A or OGG file. Several files fill this pad and the ones after it. " +
-                        "Or build a multisample with Chop, or a wavetable with Synth.")
-                    Button(onClick = { picker.launch(arrayOf("audio/*")) }, modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text("Load sample")
+                    MutedText("Load a WAV, MP3, FLAC, M4A or OGG file (several files fill this pad and the ones after it), " +
+                        "or record one. Or build a multisample with Chop, or a wavetable with Synth.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { picker.launch(arrayOf("audio/*")) }, Modifier.weight(1f)) {
+                            Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text("Load")
+                        }
+                        Button(onClick = { record(ref) }, Modifier.weight(1f)) {
+                            Icon(Icons.Default.Mic, null); Spacer(Modifier.width(8.dp)); Text("Record")
+                        }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { nav.to(Routes.chop(ref)) }, Modifier.weight(1f)) {
@@ -174,11 +182,14 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                     OutlinedButton(onClick = { picker.launch(arrayOf("audio/*")) }, Modifier.weight(1f)) {
                         Text("Replace")
                     }
-                    OutlinedButton(onClick = { swapping = true }, Modifier.weight(1f)) {
-                        Text("Swap with\u2026")
+                    OutlinedButton(onClick = { record(ref) }, Modifier.weight(1f)) {
+                        Text("Record")
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { swapping = true }, Modifier.weight(1f)) {
+                        Text("Swap\u2026")
+                    }
                     OutlinedButton(onClick = { nav.to(Routes.chop(ref)) }, Modifier.weight(1f)) {
                         Text("Chop")
                     }

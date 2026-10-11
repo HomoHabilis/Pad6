@@ -5,6 +5,10 @@
          Access Framework, which needs no storage permission. -->
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
+    <!-- Sample recording. Optional: the app works without a microphone. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
     <application
         android:name=".PyP6Application"
         android:allowBackup="false"

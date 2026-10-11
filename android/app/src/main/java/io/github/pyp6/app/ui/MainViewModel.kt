@@ -171,6 +171,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // --- recording
+
+    val recording = c.recorder.state
+
+    /** Starts recording from the microphone; playback stops so it is not picked up. */
+    fun startRecording(): Boolean {
+        c.player.stop()
+        stopPatternPreview()
+        val err = c.recorder.start() ?: return true
+        message(err, error = true)
+        return false
+    }
+
+    fun cancelRecording() = c.recorder.cancel()
+
+    /** Stops recording and puts the take on [ref], replacing what is there (Undo brings it back). */
+    fun stopRecording(ref: PadRef) {
+        val audio = c.recorder.stop()
+        if (audio == null || audio.frames == 0) { message("Nothing was recorded.", error = true); return }
+        work("Saving recording …") {
+            val name = "REC_${ref.bank}${ref.pad}"
+            val file = c.store.write(audio, name, "rec")
+            val state = c.store.newPadState(file, name)
+            repo.update { it.withPad(ref, state) }
+            message(String.format(java.util.Locale.ROOT, "%.1f s recorded on %s.", audio.durationSeconds, ref.label))
+        }
+    }
+
     fun setPad(ref: PadRef, transform: (PadState) -> PadState) {
         repo.update { p -> p.pad(ref)?.let { p.withPad(ref, transform(it)) } ?: p }
     }
@@ -666,6 +694,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         c.player.stop()
+        c.recorder.cancel()
         super.onCleared()
     }
 }

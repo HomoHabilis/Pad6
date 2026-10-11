@@ -29,7 +29,8 @@ import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -60,7 +61,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -77,6 +80,7 @@ import io.github.pyp6.app.ui.components.ConfirmDialog
 import io.github.pyp6.app.ui.components.MiniWave
 import io.github.pyp6.app.ui.components.MutedText
 import io.github.pyp6.app.ui.components.ScreenScaffold
+import io.github.pyp6.app.ui.components.rememberRecordAction
 import io.github.pyp6.app.ui.components.Tag
 import io.github.pyp6.app.ui.components.padSettingsLine
 import io.github.pyp6.app.ui.components.rememberOverFraction
@@ -107,6 +111,7 @@ fun BanksScreen(vm: MainViewModel, nav: Nav) {
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         vm.loadSamples(PadRef(bank, loadTarget), uris)
     }
+    val record = rememberRecordAction(vm)
     val bankState = project.bank(bank)
     val bytes by produceState(0L, bankState) { value = withContext(Dispatchers.IO) { PadAudio.bankBytes(bankState) } }
     val warnings by produceState(emptyList<String>(), bankState) {
@@ -163,6 +168,7 @@ fun BanksScreen(vm: MainViewModel, nav: Nav) {
                 if (st == null) EmptyPadCard(
                     pad,
                     onLoad = { loadTarget = pad; picker.launch(arrayOf("audio/*")) },
+                    onRecord = { record(ref) },
                     onChop = { nav.to(Routes.chop(ref)) },
                     onSynth = { nav.to(Routes.synth(ref)) },
                 )
@@ -248,19 +254,19 @@ private fun WarningsCard(lines: List<String>) {
     }
 }
 
-/** An empty pad: load a file, or build a multisample (Chop) or a wavetable (Synth) into it. */
+/** An empty pad: load a file, record one, or build a multisample (Chop) or a wavetable (Synth) into it. */
 @Composable
-private fun EmptyPadCard(pad: Int, onLoad: () -> Unit, onChop: () -> Unit, onSynth: () -> Unit) {
+private fun EmptyPadCard(pad: Int, onLoad: () -> Unit, onRecord: () -> Unit, onChop: () -> Unit, onSynth: () -> Unit) {
     OutlinedCard(
-        onClick = onLoad,
         modifier = Modifier.fillMaxWidth().heightIn(min = 148.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Column(Modifier.fillMaxWidth().padding(start = 10.dp, end = 4.dp, top = 10.dp, bottom = 4.dp)) {
-            Text("PAD $pad", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
-                Text("Load sample", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 10.dp, bottom = 4.dp)) {
+            Text("PAD $pad", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 6.dp))
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                EmptyPadAction(Icons.Default.FolderOpen, "Load", onLoad, Modifier.weight(1f))
+                EmptyPadAction(Icons.Default.Mic, "Record", onRecord, Modifier.weight(1f))
             }
             Row(Modifier.fillMaxWidth()) {
                 TextButton(onClick = onChop, Modifier.weight(1f), contentPadding = PaddingValues(horizontal = 2.dp)) {
@@ -273,6 +279,18 @@ private fun EmptyPadCard(pad: Int, onLoad: () -> Unit, onChop: () -> Unit, onSyn
                 }
             }
         }
+    }
+}
+
+/** One of an empty pad's two main ways in: a big icon over its label. */
+@Composable
+private fun EmptyPadAction(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier.clip(MaterialTheme.shapes.medium).clickable(onClick = onClick).padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
     }
 }
 

@@ -6,6 +6,7 @@ import io.github.pyp6.app.data.AudioImporter
 import io.github.pyp6.app.data.DeviceMonitor
 import io.github.pyp6.app.data.Player
 import io.github.pyp6.app.data.ProjectRepository
+import io.github.pyp6.app.data.Recorder
 import io.github.pyp6.core.model.SampleStore
 import io.github.pyp6.core.wavetable.WaveLibrary
 import kotlinx.coroutines.CoroutineScope
@@ -20,6 +21,7 @@ class AppContainer(app: Application) {
     val store = SampleStore(File(app.filesDir, "samples"))
     val repository = ProjectRepository(File(app.filesDir, "project.json"), scope)
     val player = Player(scope)
+    val recorder = Recorder(scope)
     val importer = AudioImporter(app, store)
     val device = DeviceMonitor(app, settings, scope)
     val waveLibrary = WaveLibrary(File(app.filesDir, "waveforms.json"))
