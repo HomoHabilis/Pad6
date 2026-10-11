@@ -233,6 +233,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         message("Swapped ${a.label} and ${b.label}." + patternsNote(changed))
     }
 
+    /** Copies pad [from] onto [to], replacing whatever [to] held. Patterns are left alone: nothing moved. */
+    fun copyPad(from: PadRef, to: PadRef) {
+        if (from == to) return
+        val st = project.value.pad(from) ?: return
+        c.player.stop()
+        work("Copying pad …") {
+            // A wavetable gets its own WAV and .PRM, and the .PRM is renumbered for the
+            // new pad: one shared file would carry only one pad number.
+            val copy = c.store.duplicateForCopy(st).copy(from_sync = false)
+            copy.wavetable?.let { if (copy.filepath != st.filepath) writeWavetablePrm(copy, to, it) }
+            repo.update { it.withPad(to, copy) }
+            message("Copied ${from.label} to ${to.label}.")
+        }
+    }
+
     fun swapBanks(a: Char, b: Char) {
         if (a == b) return
         c.player.stop()
@@ -503,6 +518,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_selectedPattern.value == a) _selectedPattern.value = b
         else if (_selectedPattern.value == b) _selectedPattern.value = a
         message(if (pb == null) "Moved pattern ${a.label} to ${b.label}." else "Swapped patterns ${a.label} and ${b.label}.")
+    }
+
+    /** Copies pattern [from] into slot [to], replacing what was there. */
+    fun copyPattern(from: PatternSlot, to: PatternSlot) {
+        if (from == to) return
+        val pat = project.value.patterns[from] ?: return
+        stopPatternPreview()
+        // P6Pattern is immutable, so both slots can hold the same object.
+        repo.update { it.copy(patterns = (it.patterns + (to to pat)).toSortedMap(), patternsDirty = true) }
+        _selectedPattern.value = to
+        message("Copied pattern ${from.label} to ${to.label}.")
     }
 
     fun togglePatternPreview(slot: PatternSlot) {

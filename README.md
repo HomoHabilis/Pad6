@@ -121,6 +121,13 @@ included. Everything swaps rather than overwrites, and `Ctrl+Z` undoes it.
 A plain click on a pad (no drag) plays it - click again to stop - so
 you can check what a pad holds right before moving it.
 
+**Duplicate** (beside Drag) copies instead of swapping: click it, click the
+pad - or, in the patterns view, the pattern - to copy, then click where the
+copy goes, in any bank. Dragging one onto another does the same while it is
+on. The copy replaces what was there (you are asked first if that held
+something), `Ctrl+Z` undoes it, and `Esc` or a second click on the button
+cancels.
+
 ### Single-cycle import - Chain, Pairs, Multi
 
 Browse to a folder of single-cycle files, pick the ones you want, and a
@@ -523,6 +530,13 @@ can be recognised by ear before it is moved. In the patterns view that click
 also lights the patterns that play the pad, and selecting a pattern still
 lights its pads, with Drag mode on or off.
 
+**Duplicate** (beside Drag) is the copying counterpart: click it, then the
+pad to copy (it gets an orange frame), then the pad the copy goes to, in any
+bank. Sample, rate, pitch, mono and wavetable all go along; a wavetable
+gets a WAV of its own. In the patterns view the same two clicks copy a
+pattern into another slot. A destination that already holds something is
+confirmed first, and `Ctrl+Z` undoes it. `Esc` cancels.
+
 #### All banks + patterns
 
 The third entry in the view dropdown keeps the same 8x6 grid, slimmed down
@@ -569,6 +583,8 @@ to each pad's waveform and its Play button, and adds the P-6's 64 patterns
     uses.
 - **Drag a pattern** onto another slot to swap the two; dropping on an empty
   slot moves it. No Drag mode is needed for patterns.
+- **Duplicate a pattern** with the Duplicate button: click it, then the
+  pattern to copy, then the slot for the copy.
 - **Clear** empties the selected pattern the way the P-6's own clear does:
   every note, granular note and knob motion goes, while tempo, length,
   shuffle, FX and the granular sound stay. It remains a real pattern file,

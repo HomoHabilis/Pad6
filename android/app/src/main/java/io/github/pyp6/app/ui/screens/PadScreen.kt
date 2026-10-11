@@ -175,7 +175,7 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                         Text("Replace")
                     }
                     OutlinedButton(onClick = { swapping = true }, Modifier.weight(1f)) {
-                        Text("Swap with\u2026")
+                        Text("Swap / copy\u2026", maxLines = 1)
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -197,13 +197,21 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
         }
     }
 
-    if (swapping) PadPickerDialog(
-        title = "Swap ${ref.label} with",
-        exclude = ref,
-        project = project,
-        onDismiss = { swapping = false },
-        onPick = { vm.swapPads(ref, it); swapping = false },
-    )
+    if (swapping) {
+        var copy by remember { mutableStateOf(false) }
+        PadPickerDialog(
+            title = if (copy) "Copy ${ref.label} to" else "Swap ${ref.label} with",
+            exclude = ref,
+            project = project,
+            onDismiss = { swapping = false },
+            onPick = { if (copy) vm.copyPad(ref, it) else vm.swapPads(ref, it); swapping = false },
+            header = {
+                SwapCopyToggle(copy, { copy = it })
+                MutedText(if (copy) "The pad you pick gets a copy of ${ref.label}, replacing what is there. Undo brings it back."
+                    else "The two pads trade places.", Modifier.padding(top = 6.dp))
+            },
+        )
+    }
     ejecting?.let { files ->
         var alsoDevice by remember { mutableStateOf(false) }
         AlertDialog(
@@ -262,6 +270,7 @@ private fun WavetableCard(
 fun PadPickerDialog(
     title: String, exclude: PadRef?, project: io.github.pyp6.core.model.Project,
     onDismiss: () -> Unit, onPick: (PadRef) -> Unit,
+    header: @Composable () -> Unit = {},
 ) {
     var bank by remember { mutableStateOf(exclude?.bank ?: 'A') }
     AlertDialog(
@@ -269,6 +278,7 @@ fun PadPickerDialog(
         title = { Text(title) },
         text = {
             Column {
+                header()
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     P6.BANKS.forEach { b ->
                         TextButton(onClick = { bank = b }, modifier = Modifier.weight(1f),
@@ -297,3 +307,17 @@ fun PadPickerDialog(
     )
 }
 
+
+/** Swap or Copy, at the top of the pad and pattern pickers: one button opens both, so neither screen grows a row. */
+@Composable
+fun SwapCopyToggle(copy: Boolean, onChange: (Boolean) -> Unit, swapLabel: String = "Swap") {
+    androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        listOf(false to swapLabel, true to "Copy").forEachIndexed { i, (isCopy, label) ->
+            androidx.compose.material3.SegmentedButton(
+                colors = io.github.pyp6.app.ui.components.segColors(), icon = {},
+                selected = copy == isCopy, onClick = { onChange(isCopy) },
+                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(i, 2),
+            ) { Text(label) }
+        }
+    }
+}

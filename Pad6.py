@@ -27305,6 +27305,9 @@ class CompactSlot:
             add_tooltip(self.wave_canvas, self._wave_tip())
 
     def _wave_tip(self):
+        if self._drag_mode and self.app.dup_mode:
+            return ("Click to pick the pad to copy, then the pad the copy goes to. "
+                    "Or drag one onto the other.")
         if self._drag_mode:
             return "Click to play (click again to stop). Drag to move the pad."
         if self._slim:
@@ -27482,6 +27485,9 @@ class CompactSlot:
             return
         self.app.drag_ghost().hide()
         self.app.clear_drag_highlights()
+        if not was_dragging and self.app.dup_mode:
+            self.app.dup_pick("pad", (self.bank, self.pad))
+            return
         if not was_dragging:
             # Pressed and released without moving. In drag mode that is the
             # only click the pad gets, since the buttons are not on screen,
@@ -27496,6 +27502,9 @@ class CompactSlot:
             return
         target = self.app.compact_cell_at_screen_pos(event.x_root, event.y_root)
         if target and target != (self.bank, self.pad):
+            if self.app.dup_mode:
+                self.app.duplicate(("pad", (self.bank, self.pad)), ("pad", target))
+                return
             self.app.swap_pads_across_banks(self.bank, self.pad, target[0], target[1])
 
     def _show_if_loaded(self):
@@ -27537,6 +27546,8 @@ class CompactSlot:
         linked = self.app.is_pattern_linked_pad(self.bank, self.pad)
         if self._drop_highlight:
             color = self._drop_highlight
+        elif self.app.dup_source() == ("pad", (self.bank, self.pad)):
+            color = ACCENT_ORANGE
         elif self.app.is_active_overview_pad(self.bank, self.pad):
             color = ACCENT_BLUE
         elif linked:
@@ -28937,7 +28948,8 @@ class PatternStrip:
                 self._draw_tile(c, slot, pat, x0, y0, x1, y1,
                                 selected=(slot == selected),
                                 linked=(slot in linked),
-                                drop=(slot == self._drop_slot),
+                                drop=(slot == self._drop_slot
+                                      or app.dup_source() == ("pattern", slot)),
                                 lifted=(self._dragging and slot == self._drag_slot))
                 regions.append((x0, y0, x1, y1, self._tip_text(slot, pat)))
         self._tip.set_regions(regions)
@@ -29037,11 +29049,16 @@ class PatternStrip:
             self.app.drag_ghost().hide()
             target = self.slot_at(event.x, event.y)
             if source and target and target != source:
+                if self.app.dup_mode:
+                    self.app.duplicate(("pattern", source), ("pattern", target))
+                    return
                 self.app.swap_patterns(source, target)
                 return
             self.redraw()
             return
-        if source:
+        if source and self.app.dup_mode:
+            self.app.dup_pick("pattern", source)
+        elif source:
             self.app.select_pattern(source)
 
 
@@ -29488,6 +29505,23 @@ class P6ManagerApp:
     "too. A bank letter dropped on another row swaps whole banks, Force "
     "Mono included. Always swaps, never overwrites; Ctrl+Z undoes it. "
     "A click without dragging plays the pad.")
+
+        # Copy instead of swap. A mode of its own for the same reason as
+        # Drag, and it shares Drag's grey pads: with the buttons out of the
+        # way, a click on a pad can only mean "this one". None while off,
+        # otherwise the picked source: ("pad", (bank, pad)) or
+        # ("pattern", slot), or "armed" while nothing is picked yet.
+        self.dup_mode = None
+        self.dup_btn = RoundedButton(
+            top, text="Duplicate", command=self.toggle_dup_mode,
+            bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK,
+            width=76, height=26, radius=7, font=ui_font(8, "bold"))
+        add_tooltip(self.dup_btn,
+                    "Copy a pad or a pattern onto another one: click this, then the "
+    "pad or pattern to copy, then where the copy goes (any bank). Dragging "
+    "one onto another does the same while it is on. Replaces what was "
+    "there; Ctrl+Z undoes it. Esc or a second click here cancels.")
+        self.root.bind("<Escape>", lambda _e: self.cancel_dup_mode(), add="+")
 
         # One Force Mono flag PER BANK, not a single global one - a single
         # shared flag can't be expressed correctly once presets can hold a
@@ -31651,6 +31685,7 @@ class P6ManagerApp:
             # banks instead of only the current one.
             self.force_mono_cb.pack_forget()
             self.drag_btn.pack(side="left", padx=(4, 0), before=self.path_label)
+            self.dup_btn.pack(side="left", padx=(4, 0), before=self.path_label)
             # Every bank is on screen here, so picking one has nothing left
             # to do. It stays in place rather than disappearing, greyed, so
             # the row keeps its shape and it is obvious where the control
@@ -31664,9 +31699,11 @@ class P6ManagerApp:
             # armed would strand the pads in their grey state.
             if self.drag_mode:
                 self.toggle_drag_mode()
+            self.cancel_dup_mode()
             self._show_pattern_panel(False)
             self.overview_container.pack_forget()
             self.drag_btn.pack_forget()
+            self.dup_btn.pack_forget()
             self.pad_container.pack(fill="x", pady=(6, 0), before=self.storage_outer)
             self.force_mono_cb.pack(side="left", padx=(4, 0), before=self.path_label)
             self.bank_menu.set_enabled(True)
@@ -31973,12 +32010,13 @@ class P6ManagerApp:
 
     def toggle_drag_mode(self):
         """Arms or disarms dragging in the overview."""
+        if not self.drag_mode and self.dup_mode:
+            self.cancel_dup_mode(quiet=True)
         self.drag_mode = not self.drag_mode
         self.drag_btn.bg_color = BTN_ORANGE if self.drag_mode else BG_INPUT
         self.drag_btn.fg_color = "#FFFFFF" if self.drag_mode else FG_TEXT
         self.drag_btn._draw()
-        for cell in self.overview_slots.values():
-            cell.set_drag_mode(self.drag_mode)
+        self._sync_cell_handles()
         # The row heads are handles too, and have to say so - otherwise the
         # bank letters are the one part of the grid that looks unchanged
         # while the mode is armed.
@@ -32001,6 +32039,152 @@ class P6ManagerApp:
             self._bank_drag = None
             self.clear_drag_highlights()
             self.show_status("")
+
+    def _sync_cell_handles(self):
+        """Greys the overview pads into click/drag handles while either
+        Drag or Duplicate is armed."""
+        on = bool(self.drag_mode or self.dup_mode)
+        for cell in self.overview_slots.values():
+            cell.set_drag_mode(on)
+            cell._update_wave_tip()
+
+    # ---- duplicate: button, then source, then destination -------------
+
+    def _set_dup_button(self, on):
+        self.dup_btn.bg_color = BTN_ORANGE if on else BG_INPUT
+        self.dup_btn.fg_color = "#FFFFFF" if on else FG_TEXT
+        self.dup_btn._draw()
+
+    def toggle_dup_mode(self):
+        if self.dup_mode:
+            self.cancel_dup_mode()
+            return
+        if self.drag_mode:
+            self.toggle_drag_mode()
+        self.dup_mode = "armed"
+        self._set_dup_button(True)
+        self._sync_cell_handles()
+        what = "pad or pattern" if self._patterns_on_screen() else "pad"
+        self.show_status(f"Duplicate: click the {what} to copy.", kind="info",
+                         duration_ms=60000)
+
+    def cancel_dup_mode(self, quiet=False):
+        if not getattr(self, "dup_mode", None):
+            return
+        self.dup_mode = None
+        self._set_dup_button(False)
+        self._sync_cell_handles()
+        self._refresh_dup_marks()
+        if not quiet:
+            self.show_status("")
+
+    def dup_source(self):
+        """The picked ("pad", (bank, pad)) or ("pattern", slot), or None."""
+        mode = getattr(self, "dup_mode", None)
+        return mode if isinstance(mode, tuple) else None
+
+    def _refresh_dup_marks(self):
+        for cell in self.overview_slots.values():
+            cell.refresh_highlight()
+        if self._patterns_on_screen():
+            self.pattern_strip.redraw()
+
+    def dup_pick(self, kind, key):
+        """A click on a pad (kind "pad", key (bank, pad)) or a pattern
+        (kind "pattern", key slot) while Duplicate is armed. The first
+        filled one picked is the source, the next one the destination;
+        picking the source again lets go of it."""
+        source = self.dup_source()
+        if source == (kind, key):
+            self.dup_mode = "armed"
+            self._refresh_dup_marks()
+            self.show_status("Duplicate: click what to copy.", kind="info",
+                             duration_ms=60000)
+            return
+        if source is None or source[0] != kind:
+            if kind == "pad":
+                filled = bool((self._get_pad_state(*key) or {}).get("filepath"))
+                label = f"pad {key[0]}{key[1]}"
+            else:
+                filled = self.patterns.get(key) is not None
+                label = f"pattern {pattern_slot_label(key)}"
+            if not filled:
+                self.show_status(f"{label[0].upper()}{label[1:]} is empty - pick one "
+                                 f"that holds something.", kind="warning",
+                                 duration_ms=60000)
+                return
+            self.dup_mode = (kind, key)
+            self._refresh_dup_marks()
+            self.show_status(f"Duplicate {label}: now click where the copy goes.",
+                             kind="info", duration_ms=60000)
+            return
+        self.duplicate(source, (kind, key))
+
+    def duplicate(self, source, dest):
+        """Copies source onto dest - both ("pad", (bank, pad)) or both
+        ("pattern", slot) - then disarms Duplicate."""
+        kind, src = source
+        dst = dest[1]
+        if dest[0] != kind or src == dst:
+            return
+        if kind == "pad":
+            done = self.duplicate_pad(src, dst)
+        else:
+            done = self.duplicate_pattern(src, dst)
+        if done:
+            self.cancel_dup_mode(quiet=True)
+
+    def duplicate_pad(self, src, dst):
+        """Copies one pad's whole content (sample, rate, pitch, mono,
+        wavetable) onto another, in any two banks. Returns True if done."""
+        state = self._get_pad_state(*src)
+        if not state or not state.get("filepath"):
+            return False
+        a, b = f"{src[0]}{src[1]}", f"{dst[0]}{dst[1]}"
+        if (self._get_pad_state(*dst) or {}).get("filepath"):
+            if not dark_askyesno(f"Replace {b}?",
+                                 f"Pad {b} already holds a sample. Replace it with a "
+                                 f"copy of {a}?\n\nCtrl+Z undoes it.", parent=self.root):
+                return False
+        self._push_undo()
+        self._save_active_bank_state()
+        # deepcopy for the same reason as Copy To bank: the two pads must
+        # not share one state dict.
+        new = copy.deepcopy(state)
+        # The copy is not on the device yet, whatever the original was.
+        new["from_sync"] = False
+        if new.get("wavetable"):
+            self._duplicate_wavetable_for(new)
+        if dst[0] == self._active_bank and getattr(self, "_wave_view_pad", None) == dst[1]:
+            # The waveform panel shows the sample being replaced.
+            self.clear_playback_waveform()
+        self.slots[dst[0]][dst[1]] = new
+        self.build_pad_slots(self._active_bank)
+        self.refresh_overview()
+        self.show_status(f"Copied {a} to {b}.")
+        return True
+
+    def duplicate_pattern(self, src, dst):
+        """Copies one pattern slot onto another. Returns True if done."""
+        pat = self.patterns.get(src)
+        if pat is None:
+            return False
+        a, b = pattern_slot_label(src), pattern_slot_label(dst)
+        old = self.patterns.get(dst)
+        if old is not None and not old.is_empty:
+            if not dark_askyesno(f"Replace pattern {b}?",
+                                 f"Pattern {b} has notes. Replace it with a copy of "
+                                 f"{a}?\n\nCtrl+Z undoes it.", parent=self.root):
+                return False
+        self._push_undo()
+        # P6Pattern is immutable, so the two slots can share the object.
+        self.patterns[dst] = pat
+        self.selected_pattern = dst
+        self._pattern_focus = "pattern"
+        self._patterns_dirty = True
+        self._refresh_pattern_links()
+        self.show_status(f"Copied pattern {a} to {b}.")
+        return True
 
     def drag_ghost(self):
         """The outline that follows the pointer during a drag. Built on

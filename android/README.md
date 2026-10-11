@@ -83,12 +83,12 @@ Everything the desktop app does, arranged as screens instead of one window:
 | Screen | Desktop feature |
 |---|---|
 | **Pads** | Single-bank view: 8 banks, 6 pads each, Force Mono per bank, storage bar, length warnings; Copy/Move bank, Clear banks, Undo/Redo (25 steps) |
-| **Pad** (tap a pad) | Load (WAV, MP3, FLAC, M4A, OGG … - decoded by Android, no ffmpeg needed), play as exported, sample rate / pitch / mono, `.PRM` status, swap with any pad, eject (optionally deleting it from the P-6) |
+| **Pad** (tap a pad) | Load (WAV, MP3, FLAC, M4A, OGG … - decoded by Android, no ffmpeg needed), play as exported, sample rate / pitch / mono, `.PRM` status, swap with or copy to any pad (Swap / copy…), eject (optionally deleting it from the P-6) |
 | **Edit** | Waveform editor: trim with brackets (zero-crossing snap), zoom, normalize, fades, length/BPM change without pitch shift (move pieces / stretch spectrum / auto), Fit, keep length while pitching, ½×/2× tempo swap |
 | **Chop** | Multisample builder: whole files or regions, Detect Hits with sensitivity, add all/one piece, merge pieces, reorder, 1-64 slices, rate, stereo/mono, normalize modes |
 | **Synth** | Wavetable synth: Simple sets (Basic, Vintage 1/2, Hot Microwaves 1/2, Hot MW 1 Big 255WF, Randomize), Advanced step order of up to 16 families, register/root note/upward range, morph preview, table preview, init patch + poly, drawing your own waveforms, single-cycle import (Chain / Pairs / Multi, whole wavetable files split into frames) |
 | **All banks** | 8 × 6 overview; long-press and drag a pad onto another (across banks) or a bank letter onto another bank to swap; tap to play |
-| **Patterns** | 64 patterns (4 banks of 16): which pads each plays and the other way round, play with the current pads (looped, with step cursor), drag to swap/move, Clear, Sync patterns with pad moves, load from BACKUP or a folder, save to RESTORE or a folder |
+| **Patterns** | 64 patterns (4 banks of 16): which pads each plays and the other way round, play with the current pads (looped, with step cursor), drag to swap/move, Move/copy… to swap or copy into any slot, Clear, Sync patterns with pad moves, load from BACKUP or a folder, save to RESTORE or a folder |
 | **P-6** | Connection, Banks → P-6 (with .PRM, per-bank sizes and limit), P-6 → Bank, Wipe IMPORT |
 | **Presets** | Save/load banks and pattern banks, partial overwrite, load one bank into another; same folder layout and `preset.json` as desktop, so presets move between phone and computer (choose a shared folder) |
 | **Settings** | The eleven desktop themes plus Material You, storage warning, removing unused files, `.p6wf` waveform packs import/export, About (project page, original project, license) |
