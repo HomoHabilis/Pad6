@@ -45,11 +45,8 @@ import java.io.File
 
 data class UiMessage(val text: String, val error: Boolean = false)
 
-/**
- * A dialog with a title and text that the user dismisses. With [onConfirm]
- * it asks instead: [confirm] runs it, Cancel just closes.
- */
-data class Alert(val title: String, val text: String, val confirm: String = "OK", val onConfirm: (() -> Unit)? = null)
+/** A dialog with a title and text that the user dismisses. */
+data class Alert(val title: String, val text: String)
 
 /** What the pattern preview is doing: which slot, how long a step is, how many steps. */
 /** [frames]: one pass of the pattern (the buffer holds a lead-in pass plus the looping one). */
@@ -105,12 +102,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _alert.value = Alert(title, text)
     }
 
-    fun confirmAlert() {
-        val a = _alert.value
-        _alert.value = null
-        a?.onConfirm?.invoke()
-    }
-
     fun dismissAlert() {
         _alert.value = null
     }
@@ -150,36 +141,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * Loads [uris] onto [ref]; several files fill the following pads of the
      * bank in order, like dropping several files on the desktop app.
      *
-     * Files at a rate the P-6 does not play (48 kHz above all) are offered
-     * for conversion first: OK resamples them to [P6.defaultRateFor] as they
-     * load ([convertRates] = true), Cancel loads nothing.
+     * Files at a rate the P-6 does not play (48 kHz above all) are resampled
+     * to [P6.defaultRateFor] as they load, and the message says so.
      */
-    fun loadSamples(ref: PadRef, uris: List<Uri>, convertRates: Boolean? = null) {
+    fun loadSamples(ref: PadRef, uris: List<Uri>) {
         if (uris.isEmpty()) return
         work("Loading …") {
-            if (convertRates == null) {
-                val fitting = uris.take(P6.PADS.size - ref.pad + 1)
-                val off = fitting.mapNotNull { u ->
-                    c.importer.sampleRate(u)?.takeIf { it !in P6.TARGET_RATES }?.let { c.importer.displayName(u) to it }
-                }
-                if (off.isNotEmpty()) {
-                    val rates = P6.TARGET_RATES.joinToString(", ")
-                    val text = if (off.size == 1) {
-                        val (n, r) = off[0]
-                        "$n is $r Hz. The P-6 only plays $rates Hz.\n\nConvert it to ${P6.defaultRateFor(r)} Hz now?"
-                    } else {
-                        "${off.size} files use a rate the P-6 does not play (it takes $rates Hz):\n\n" +
-                            off.joinToString("\n") { (n, r) -> "$n: $r \u2192 ${P6.defaultRateFor(r)} Hz" } +
-                            "\n\nConvert them now?"
-                    }
-                    _alert.value = Alert("Convert sample rate?", "$text\n\nCancel loads nothing.", "Convert") {
-                        loadSamples(ref, uris, convertRates = true)
-                    }
-                    return@work
-                }
-            }
             val loaded = ArrayList<Pair<PadRef, PadState>>()
             val failed = ArrayList<String>()
+            val converted = ArrayList<Pair<Int, Int>>()
             var pad = ref.pad
             for (uri in uris) {
                 if (pad > P6.PADS.size) break
@@ -188,11 +158,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 try {
                     var (file, _) = c.importer.import(uri)
                     val rate = Wav.readInfo(file).rate
-                    if (convertRates == true && rate !in P6.TARGET_RATES) {
+                    if (rate !in P6.TARGET_RATES) {
                         _busy.value = "Converting $name to ${P6.defaultRateFor(rate)} Hz"
                         val resampled = Resampler.resample(Wav.read(file), P6.defaultRateFor(rate))
                         file.delete()
                         file = c.store.write(resampled, name, "conv")
+                        converted.add(rate to P6.defaultRateFor(rate))
                     }
                     val state = c.store.newPadState(file, name)
                     loaded.add(PadRef(ref.bank, pad) to state)
@@ -204,10 +175,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             if (loaded.isNotEmpty()) {
                 repo.update { p -> loaded.fold(p) { acc, (r, s) -> acc.withPad(r, s) } }
                 val extra = uris.size - loaded.size - failed.size
+                val conv = when {
+                    converted.isEmpty() -> ""
+                    converted.size == 1 -> " Converted from ${converted[0].first} to ${converted[0].second} Hz (the P-6 does not play ${converted[0].first} Hz)."
+                    else -> " ${converted.size} converted to a P-6 rate (" +
+                        converted.distinct().joinToString(", ") { (a, b) -> "$a\u2192$b Hz" } + ")."
+                }
                 message(
-                    if (loaded.size == 1) "${loaded[0].second.name} loaded on ${loaded[0].first.label}."
+                    (if (loaded.size == 1) "${loaded[0].second.name} loaded on ${loaded[0].first.label}."
                     else "${loaded.size} samples loaded from ${loaded.first().first.label}." +
-                        if (extra > 0) " $extra did not fit in the bank." else ""
+                        if (extra > 0) " $extra did not fit in the bank." else "") + conv
                 )
             }
             if (failed.isNotEmpty()) showAlert("Some files could not be loaded", failed.joinToString("\n"))
@@ -222,7 +199,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startRecording(): Boolean {
         c.player.stop()
         stopPatternPreview()
-        val err = c.recorder.start() ?: return true
+        val err = c.recorder.start(settings.value.micMode) ?: return true
         message(err, error = true)
         return false
     }

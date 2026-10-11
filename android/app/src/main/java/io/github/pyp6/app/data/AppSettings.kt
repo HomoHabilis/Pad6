@@ -20,6 +20,7 @@ data class Settings(
     val autoplay: Boolean = true,
     /** Peak-normalise a recording when it is put on a pad. */
     val normalizeRecordings: Boolean = true,
+    val micMode: MicMode = MicMode.STANDARD,
     val recentPresets: List<String> = emptyList(),
     val lastBank: Char = 'A',
 )
@@ -42,6 +43,7 @@ class AppSettings(context: Context) {
         storageWarningMb = prefs.getInt("storageWarningMb", 10),
         autoplay = prefs.getBoolean("autoplay", true),
         normalizeRecordings = prefs.getBoolean("normalizeRecordings", true),
+        micMode = MicMode.fromKey(prefs.getString("micMode", null)),
         recentPresets = prefs.getString("recentPresets", "")!!.split('\n').filter { it.isNotBlank() },
         lastBank = (prefs.getString("lastBank", "A") ?: "A").firstOrNull() ?: 'A',
     )
@@ -59,6 +61,7 @@ class AppSettings(context: Context) {
             .putInt("storageWarningMb", s.storageWarningMb)
             .putBoolean("autoplay", s.autoplay)
             .putBoolean("normalizeRecordings", s.normalizeRecordings)
+            .putString("micMode", s.micMode.key)
             .putString("recentPresets", s.recentPresets.joinToString("\n"))
             .putString("lastBank", s.lastBank.toString())
             .apply()

@@ -3070,12 +3070,11 @@ class _DarkMessageDialog(tk.Toplevel):
         btn_row = tk.Frame(body, bg=BG_DARK)
         btn_row.pack(fill="x", pady=(16, 0))
 
-        if buttons in ("yesno", "okcancel"):
-            no_text, yes_text = ("Cancel", "OK") if buttons == "okcancel" else ("No", "Yes")
-            no_btn = RoundedButton(btn_row, text=no_text, command=self._on_no,
+        if buttons == "yesno":
+            no_btn = RoundedButton(btn_row, text="No", command=self._on_no,
                                     bg=BG_INPUT, fg=FG_TEXT, parent_bg=BG_DARK, width=80)
             no_btn.pack(side="right", padx=4)
-            yes_btn = RoundedButton(btn_row, text=yes_text, command=self._on_yes,
+            yes_btn = RoundedButton(btn_row, text="Yes", command=self._on_yes,
                                      bg=BTN_GREEN, fg="#FFFFFF", parent_bg=BG_DARK, width=80)
             yes_btn.pack(side="right", padx=4)
         else:
@@ -3148,13 +3147,6 @@ def dark_showerror(title=None, message=None, parent=None, **kwargs):
 def dark_askyesno(title=None, message=None, parent=None, **kwargs):
     root = _dark_msg_parent(parent)
     dlg = _DarkMessageDialog(root, title, message, kind="question", buttons="yesno")
-    root.wait_window(dlg)
-    return bool(dlg.result)
-
-
-def dark_askokcancel(title=None, message=None, parent=None, kind="warning", **kwargs):
-    root = _dark_msg_parent(parent)
-    dlg = _DarkMessageDialog(root, title, message, kind=kind, buttons="okcancel")
     root.wait_window(dlg)
     return bool(dlg.result)
 
@@ -6103,59 +6095,46 @@ def p6_rate_for(rate):
     return min(above) if above else max(TARGET_RATES)
 
 
-def confirm_rate_conversion(paths, parent=None):
-    """Offers to resample, before they reach a pad, the files whose sample
-    rate the P-6 does not play (48 kHz is the usual one: video, phones,
-    most DAWs). Returns [(path, display_name)] to load - the converted temp
-    copies where the user said OK - or None when they cancelled.
+def convert_to_p6_rates(paths):
+    """Resamples, before they reach a pad, the files whose sample rate the
+    P-6 does not play (48 kHz is the usual one: video, phones, most DAWs),
+    to p6_rate_for() of their rate. Returns ([(path, display_name)], note):
+    the converted temp copies in place of those files, and a one-line
+    status text naming what was converted (None when nothing was).
 
     Non-WAV files are decoded here already (set_file would do it anyway),
     since their rate is only known once they are WAV. Without pydub
     nothing can be resampled, so the files go through unchanged and the
-    export does what it always did."""
-    items = []
+    export does what it always did. A file that fails to resample is
+    loaded as it is, for the same reason."""
+    out, done = [], []
     for path in paths:
         name = os.path.basename(path)
         wav, _ = convert_to_wav_if_needed(path)
         if not wav.lower().endswith(".wav"):
-            items.append((path, name, None))      # set_file reports it
+            out.append((path, name))              # set_file reports it
             continue
         try:
             _, rate, _ = get_wav_info(wav)
         except Exception:
             rate = None                           # float WAV etc.: left to the export
-        items.append((wav, name, rate))
-    off = [(w, n, r) for w, n, r in items if r and r not in TARGET_RATES]
-    if not off or not PYDUB_AVAILABLE:
-        return [(w, n) for w, n, _ in items]
-    rates = ", ".join(str(r) for r in TARGET_RATES)
-    if len(off) == 1:
-        _, n, r = off[0]
-        msg = (f"'{n}' is {r} Hz. The P-6 only plays {rates} Hz.\n\n"
-               f"Convert it to {p6_rate_for(r)} Hz now?")
-    else:
-        lines = [f"  {n}: {r} \u2192 {p6_rate_for(r)} Hz" for _, n, r in off[:8]]
-        if len(off) > 8:
-            lines.append(f"  \u2026 and {len(off) - 8} more")
-        msg = (f"{len(off)} files use a rate the P-6 does not play (it takes {rates} Hz):\n\n"
-               + "\n".join(lines) + "\n\nConvert them now?")
-    msg += "\n\nCancel loads nothing."
-    if not dark_askokcancel("Convert Sample Rate?", msg, parent=parent):
-        return None
-    out = []
-    for wav, name, rate in items:
-        if rate and rate not in TARGET_RATES:
+        if rate and rate not in TARGET_RATES and PYDUB_AVAILABLE:
+            target = p6_rate_for(rate)
             try:
-                target = p6_rate_for(rate)
                 conv = derived_temp_path(name, "conv")
                 AudioSegment.from_wav(wav).set_frame_rate(target).export(conv, format="wav")
                 wav = conv
+                done.append((name, rate, target))
             except Exception as e:
-                dark_showerror("Conversion Error", f"'{name}' could not be resampled.\n\nDetails: {e}",
-                               parent=parent)
-                return None
+                print(f"Could not resample {name}: {type(e).__name__}: {e}")
         out.append((wav, name))
-    return out
+    if not done:
+        return out, None
+    if len(done) == 1:
+        n, r, t = done[0]
+        return out, f"{n} converted from {r} to {t} Hz (the P-6 does not play {r} Hz)."
+    return out, f"{len(done)} files converted to a P-6 sample rate (" + ", ".join(
+        f"{r}\u2192{t} Hz" for r, t in sorted({(r, t) for _, r, t in done})) + ")."
 
 
 def build_chop_file(file_paths, rate, channels, num_slices, normalize_mode="off"):
@@ -26604,13 +26583,13 @@ class SampleSlot:
         dialog = AudioPreviewDialog(self.app.root, initial_dir=initial_dir)
         self.app.root.wait_window(dialog)
         if dialog.selected_path:
-            files = confirm_rate_conversion([dialog.selected_path], parent=self.app.root)
-            if files is None:
-                return
+            files, note = convert_to_p6_rates([dialog.selected_path])
             path, name = files[0]
             if hasattr(self.app, "_push_undo"):
                 self.app._push_undo()
             self.set_file(path, display_name=dialog.selected_display_name or name)
+            if note and hasattr(self.app, "show_status"):
+                self.app.show_status(note, kind="info", duration_ms=8000)
             # Use the folder the user actually browsed to, not
             # os.path.dirname(selected_path) - if the sample was trimmed,
             # selected_path points into the app temp folder, which
@@ -30689,11 +30668,9 @@ class P6ManagerApp:
             return "break"
 
         self.stop_playback_waveform()
-        # Only what fits from the target pad on is offered for conversion.
+        # Only what fits from the target pad on is converted.
         first_pad = target[1] if self._is_overview() else target
-        files = confirm_rate_conversion(audio_paths[:len(PADS) - first_pad + 1], parent=self.root)
-        if files is None:
-            return "break"
+        files, note = convert_to_p6_rates(audio_paths[:len(PADS) - first_pad + 1])
         self._push_undo()
         if self._is_overview():
             # The files are written through the live pad widgets, which only
@@ -30719,6 +30696,8 @@ class P6ManagerApp:
         if self._is_overview():
             self._save_active_bank_state()
             self.refresh_overview()
+        if note:
+            self.show_status(note, kind="info", duration_ms=8000)
         return "break"
 
     def bank_force_mono(self, bank):

@@ -453,11 +453,10 @@ Trimmed and normalized results go to the temp folder - your original file is
 never modified.
 
 The P-6 plays only 44100, 22050, 14700 and 11025 Hz. A file at any other rate
-(48 kHz is the usual one) is offered for conversion when it is loaded or
-dropped on a pad: OK resamples it to the lowest P-6 rate that still holds
+(48 kHz is the usual one) is converted when it is loaded or dropped on a pad,
+and the status line says so: it goes to the lowest P-6 rate that still holds
 everything it has - 44100 Hz for anything above (48/96 kHz), 44100 for
-32 kHz, 22050 for 16 kHz, 11025 for 8 kHz - and Cancel loads nothing. The
-Android app asks the same way.
+32 kHz, 22050 for 16 kHz, 11025 for 8 kHz. The Android app does the same.
 
 ### 5.3 Per-pad sound settings
 

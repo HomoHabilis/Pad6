@@ -18,17 +18,32 @@ import kotlin.math.max
 /** A recording in progress: how long it is so far and the recent peak level (0..1). */
 data class Recording(val seconds: Double, val level: Float, val clipped: Boolean)
 
+/** Which of Android's capture presets a recording uses. */
+enum class MicMode(val key: String, val label: String, val source: Int) {
+    /** The phone's own tuning for recording sound: usually the loudest. */
+    STANDARD("standard", "Standard", MediaRecorder.AudioSource.MIC),
+    /** Flat response, no automatic gain; level varies between phones. */
+    FLAT("flat", "Flat", MediaRecorder.AudioSource.VOICE_RECOGNITION),
+    /** No processing at all: the cleanest signal, often much quieter. */
+    RAW("raw", "Raw", MediaRecorder.AudioSource.UNPROCESSED);
+
+    companion object {
+        fun fromKey(k: String?) = entries.firstOrNull { it.key == k } ?: STANDARD
+    }
+}
+
 /**
  * Records the microphone (or whatever input Android routes, e.g. a USB
- * interface) to memory as 44.1 kHz 16-bit mono - the P-6's own format, so
- * nothing is lost on export. The caller must hold RECORD_AUDIO.
+ * interface) to memory at 44.1 kHz mono, the P-6's own rate. Captured as
+ * 32-bit float, so a quiet take keeps its detail when it is normalised
+ * before the 16-bit file is written. The caller must hold RECORD_AUDIO.
  */
 class Recorder(private val scope: CoroutineScope) {
     private val _state = MutableStateFlow<Recording?>(null)
     val state: StateFlow<Recording?> = _state.asStateFlow()
 
     private var record: AudioRecord? = null
-    private var data = ShortArray(RATE * 10)
+    private var data = FloatArray(RATE * 10)
     private var size = 0
 
     val isRecording: Boolean get() = record != null
@@ -36,15 +51,15 @@ class Recorder(private val scope: CoroutineScope) {
     /** Starts recording; returns an error text when the input could not be opened. */
     @SuppressLint("MissingPermission")
     @Synchronized
-    fun start(): String? {
+    fun start(mode: MicMode = MicMode.STANDARD): String? {
         if (record != null) return null
-        val minBuf = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        val minBuf = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT)
         if (minBuf <= 0) return "This device cannot record at $RATE Hz."
-        val bufBytes = max(minBuf, RATE / 5 * 2)
-        // UNPROCESSED skips noise suppression and AGC where the device offers it: better for samples.
-        val r = listOf(MediaRecorder.AudioSource.UNPROCESSED, MediaRecorder.AudioSource.MIC).firstNotNullOfOrNull { src ->
+        val bufBytes = max(minBuf, RATE / 5 * 4)
+        // The chosen preset first; plain MIC when the phone does not offer it (Raw is optional).
+        val r = listOf(mode.source, MediaRecorder.AudioSource.MIC).distinct().firstNotNullOfOrNull { src ->
             runCatching {
-                val a = AudioRecord(src, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufBytes)
+                val a = AudioRecord(src, RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, bufBytes)
                 if (a.state == AudioRecord.STATE_INITIALIZED) a else { a.release(); null }
             }.getOrNull()
         } ?: return "The microphone could not be opened."
@@ -64,21 +79,21 @@ class Recorder(private val scope: CoroutineScope) {
         scope.launch(Dispatchers.IO) {
             // This loop owns [r]: it releases it once stop() has stopped it (which ends a blocked read).
             try {
-                val chunk = ShortArray(RATE / 20)
+                val chunk = FloatArray(RATE / 20)
                 var clipped = false
                 while (isActive) {
-                    val n = r.read(chunk, 0, chunk.size)
+                    val n = r.read(chunk, 0, chunk.size, AudioRecord.READ_BLOCKING)
                     if (n < 0) break
                     if (n == 0) { if (record !== r) break else continue }
-                    var peak = 0
-                    for (i in 0 until n) peak = max(peak, abs(chunk[i].toInt()))
-                    if (peak >= 32767) clipped = true
+                    var peak = 0f
+                    for (i in 0 until n) peak = max(peak, abs(chunk[i]))
+                    if (peak >= 0.999f) clipped = true
                     synchronized(this@Recorder) {
                         if (record !== r) return@launch
                         if (size + n > data.size) data = data.copyOf(max(data.size * 2, size + n))
                         System.arraycopy(chunk, 0, data, size, n)
                         size += n
-                        _state.value = Recording(size.toDouble() / RATE, peak / 32768f, clipped)
+                        _state.value = Recording(size.toDouble() / RATE, peak.coerceAtMost(1f), clipped)
                     }
                     if (size >= MAX_SECONDS * RATE) break
                 }
@@ -92,7 +107,7 @@ class Recorder(private val scope: CoroutineScope) {
 
     /** Stops and returns what was recorded, or null when nothing was. */
     fun stop(): Audio? {
-        val pcm: ShortArray
+        val pcm: FloatArray
         val frames: Int
         synchronized(this) {
             val r = record ?: return null
@@ -101,13 +116,13 @@ class Recorder(private val scope: CoroutineScope) {
             _state.value = null
             pcm = data
             frames = size
-            data = ShortArray(RATE * 10)
+            data = FloatArray(RATE * 10)
             size = 0
         }
         // The first few milliseconds often hold the input settling; skip them.
         val skip = minOf(frames, RATE / 50)
         if (frames - skip <= 0) return null
-        return Audio(RATE, listOf(FloatArray(frames - skip) { pcm[it + skip] / 32768f }))
+        return Audio(RATE, listOf(pcm.copyOfRange(skip, frames)))
     }
 
     /** Stops and throws the recording away. */

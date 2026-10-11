@@ -38,6 +38,7 @@ import io.github.pyp6.app.ui.MainViewModel
 import io.github.pyp6.app.ui.theme.LocalPyP6Colors
 import io.github.pyp6.core.model.PadRef
 import java.util.Locale
+import kotlin.math.log10
 
 /**
  * The Record action for a pad: returns what to call to record onto a pad.
@@ -90,8 +91,9 @@ private fun RecordDialog(vm: MainViewModel, ref: PadRef, onClose: () -> Unit) {
                     style = MaterialTheme.typography.displaySmall, fontFamily = FontFamily.Monospace,
                     color = if (recording) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                // In dB over the last 60 dB, like a mixer's meter: a quiet input still moves it.
                 LinearProgressIndicator(
-                    progress = { rec?.level ?: 0f },
+                    progress = { rec?.level?.let { ((20 * log10(it.coerceAtLeast(1e-6f)) + 60f) / 60f).coerceIn(0f, 1f) } ?: 0f },
                     color = if (rec?.clipped == true) pc.over else pc.good,
                     drawStopIndicator = {},
                     modifier = Modifier.fillMaxWidth(),

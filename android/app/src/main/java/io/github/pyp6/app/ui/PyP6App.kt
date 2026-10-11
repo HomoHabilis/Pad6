@@ -102,7 +102,7 @@ fun PyP6App(vm: MainViewModel, startRoute: String = TopLevel.PADS.route) {
     LaunchedEffect(Unit) {
         vm.messages.collect {
             snackbar.showSnackbar(it.text, withDismissAction = it.error,
-                duration = if (it.error) SnackbarDuration.Long else SnackbarDuration.Short)
+                duration = if (it.error || it.text.length > 60) SnackbarDuration.Long else SnackbarDuration.Short)
         }
     }
 
@@ -158,8 +158,7 @@ fun PyP6App(vm: MainViewModel, startRoute: String = TopLevel.PADS.route) {
             onDismissRequest = vm::dismissAlert,
             title = { Text(a.title) },
             text = { Text(a.text, modifier = Modifier.verticalScroll(rememberScrollState())) },
-            confirmButton = { TextButton(onClick = vm::confirmAlert) { Text(a.confirm) } },
-            dismissButton = if (a.onConfirm != null) ({ TextButton(onClick = vm::dismissAlert) { Text("Cancel") } }) else null,
+            confirmButton = { TextButton(onClick = vm::dismissAlert) { Text("OK") } },
         )
     }
 }

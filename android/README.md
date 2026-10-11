@@ -83,7 +83,7 @@ Everything the desktop app does, arranged as screens instead of one window:
 | Screen | Desktop feature |
 |---|---|
 | **Pads** | Single-bank view: 8 banks, 6 pads each, Force Mono per bank, storage bar, length warnings; Copy/Move bank, Clear banks, Undo/Redo (25 steps) |
-| **Pad** (tap a pad) | Load (WAV, MP3, FLAC, M4A, OGG … - decoded by Android, no ffmpeg needed) or record from the microphone (44.1 kHz mono), play as exported, sample rate / pitch / mono, `.PRM` status, swap with any pad, eject (optionally deleting it from the P-6) |
+| **Pad** (tap a pad) | Load (WAV, MP3, FLAC, M4A, OGG … - decoded by Android, no ffmpeg needed) or record from the microphone (44.1 kHz mono; Standard/Flat/Raw mic modes, optional normalize), files at a rate the P-6 does not play converted on load, play as exported, sample rate / pitch / mono, `.PRM` status, swap with any pad, eject (optionally deleting it from the P-6) |
 | **Edit** | Waveform editor: trim with brackets (zero-crossing snap), zoom, normalize, fades, length/BPM change without pitch shift (move pieces / stretch spectrum / auto), Fit, keep length while pitching, ½×/2× tempo swap |
 | **Chop** | Multisample builder: whole files or regions, Detect Hits with sensitivity, add all/one piece, merge pieces, reorder, 1-64 slices, rate, stereo/mono, normalize modes |
 | **Synth** | Wavetable synth: Simple sets (Basic, Vintage 1/2, Hot Microwaves 1/2, Hot MW 1 Big 255WF, Randomize), Advanced step order of up to 16 families, register/root note/upward range, morph preview, table preview, init patch + poly, drawing your own waveforms, single-cycle import (Chain / Pairs / Multi, whole wavetable files split into frames) |
