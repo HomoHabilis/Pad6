@@ -61,7 +61,7 @@ object Resampler {
     }
 
     fun outputFrames(frames: Int, fromRate: Double, toRate: Int): Int =
-        (frames * toRate / fromRate).roundToInt()
+        (frames.toDouble() * toRate / fromRate).roundToInt()      // Double first: frames * toRate overflows Int past ~1 s
 
     /**
      * Resamples [samples] recorded at [fromRate] to [toRate]. [fromRate] may

@@ -89,6 +89,15 @@ class CoreTest {
     }
 
     @Test
+    fun resamplingLongSamplesDoesNotOverflow() {
+        // 3 s at 48 kHz: frames * 44100 is past Int.MAX_VALUE, which once gave a wrong (or negative) length.
+        val a = sine(48000, 3.0, 440.0)
+        val b = Resampler.resample(a, 44100)
+        assertEquals(132300, b.frames)
+        assertTrue("peak ${b.peak()}", abs(b.peak() - a.peak()) < 0.02f)
+    }
+
+    @Test
     fun trimSnapsToZeroCrossingsAndNormalizeHitsTarget() {
         val a = sine(44100, 1.0)
         val t = Edit.trim(a, 0.25, 0.75)
