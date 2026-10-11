@@ -38,6 +38,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -187,15 +190,15 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { swapping = true }, Modifier.weight(1f)) {
-                        Text("Swap\u2026")
-                    }
                     OutlinedButton(onClick = { nav.to(Routes.chop(ref)) }, Modifier.weight(1f)) {
                         Text("Chop")
                     }
                     if (!st.isWavetable) OutlinedButton(onClick = { nav.to(Routes.synth(ref)) }, Modifier.weight(1f)) {
                         Text("Synth")
                     }
+                }
+                OutlinedButton(onClick = { swapping = true }, Modifier.fillMaxWidth()) {
+                    Text("Swap/copy\u2026", maxLines = 1)
                 }
                 OutlinedButton(
                     onClick = {
@@ -208,13 +211,21 @@ fun PadScreen(vm: MainViewModel, nav: Nav, ref: PadRef) {
         }
     }
 
-    if (swapping) PadPickerDialog(
-        title = "Swap ${ref.label} with",
-        exclude = ref,
-        project = project,
-        onDismiss = { swapping = false },
-        onPick = { vm.swapPads(ref, it); swapping = false },
-    )
+    if (swapping) {
+        var copy by remember { mutableStateOf(false) }
+        PadPickerDialog(
+            title = if (copy) "Copy ${ref.label} to" else "Swap ${ref.label} with",
+            exclude = ref,
+            project = project,
+            onDismiss = { swapping = false },
+            onPick = { if (copy) vm.copyPad(ref, it) else vm.swapPads(ref, it); swapping = false },
+            header = {
+                SwapCopyToggle(copy, { copy = it })
+                MutedText(if (copy) "The pad you pick gets a copy of ${ref.label}, replacing what is there. Undo brings it back."
+                    else "The two pads trade places.", Modifier.padding(top = 6.dp))
+            },
+        )
+    }
     ejecting?.let { files ->
         var alsoDevice by remember { mutableStateOf(false) }
         AlertDialog(
@@ -273,6 +284,7 @@ private fun WavetableCard(
 fun PadPickerDialog(
     title: String, exclude: PadRef?, project: io.github.pyp6.core.model.Project,
     onDismiss: () -> Unit, onPick: (PadRef) -> Unit,
+    header: @Composable () -> Unit = {},
 ) {
     var bank by remember { mutableStateOf(exclude?.bank ?: 'A') }
     AlertDialog(
@@ -280,6 +292,7 @@ fun PadPickerDialog(
         title = { Text(title) },
         text = {
             Column {
+                header()
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     P6.BANKS.forEach { b ->
                         TextButton(onClick = { bank = b }, modifier = Modifier.weight(1f),
@@ -308,3 +321,17 @@ fun PadPickerDialog(
     )
 }
 
+
+/** Swap or Copy, at the top of the pad and pattern pickers: one button opens both, so neither screen grows a row. */
+@Composable
+fun SwapCopyToggle(copy: Boolean, onChange: (Boolean) -> Unit, swapLabel: String = "Swap") {
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        listOf(false to swapLabel, true to "Copy").forEachIndexed { i, (isCopy, label) ->
+            SegmentedButton(
+                colors = io.github.pyp6.app.ui.components.segColors(), icon = {},
+                selected = copy == isCopy, onClick = { onChange(isCopy) },
+                shape = SegmentedButtonDefaults.itemShape(i, 2),
+            ) { Text(label) }
+        }
+    }
+}

@@ -222,7 +222,19 @@ fun PatternsScreen(vm: MainViewModel, nav: Nav) {
             dismissButton = { TextButton(onClick = { saveFolderPlan = null }) { Text("Cancel") } },
         )
     }
-    if (moving && selected != null) SlotPickerDialog(selected!!, pats, onDismiss = { moving = false }) { t -> vm.swapPatterns(selected!!, t); moving = false }
+    if (moving && selected != null) {
+        val here = selected!!
+        // An empty slot pulls the picked pattern in; a filled one sends its own out.
+        val into = pats[here] == null
+        SlotPickerDialog(here, pats, into, onDismiss = { moving = false }) { t, copy ->
+            when {
+                !copy -> vm.swapPatterns(here, t)
+                into -> vm.copyPattern(t, here)
+                else -> { vm.copyPattern(here, t); bank = t.bank }
+            }
+            moving = false
+        }
+    }
 }
 
 @Composable
@@ -368,7 +380,7 @@ private fun PatternCard(
             MutedText("No file for this slot. A restore leaves whatever the P-6 has here. Clear creates an empty pattern, which does overwrite it.")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = { vm.clearPattern(slot) }, Modifier.weight(1f)) { Text("Create empty") }
-                OutlinedButton(onClick = onMove, Modifier.weight(1f)) { Text("Move here…") }
+                OutlinedButton(onClick = onMove, Modifier.weight(1f)) { Text("Move / copy…", maxLines = 1) }
             }
             return@Section
         }
@@ -411,13 +423,16 @@ private fun PatternCard(
                 if (p.granularCount > 0) Tag("Granular ×${p.granularCount} (${Parts.padName(p.granularSource)})", pc.mono)
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { vm.togglePatternPreview(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // Play takes what the other two leave: their labels are fixed, and at large
+            // text sizes three equal thirds cut "Move/copy…" and wrap "Play".
+            val tight = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+            Button(onClick = { vm.togglePatternPreview(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f), contentPadding = tight) {
                 Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, null)
-                Spacer(Modifier.width(4.dp)); Text(if (playing) "Stop" else "Play")
+                Spacer(Modifier.width(4.dp)); Text(if (playing) "Stop" else "Play", maxLines = 1)
             }
-            FilledTonalButton(onClick = { vm.clearPattern(slot) }, enabled = !p.isEmpty, modifier = Modifier.weight(1f)) { Text("Clear") }
-            OutlinedButton(onClick = onMove, modifier = Modifier.weight(1f)) { Text("Move…") }
+            FilledTonalButton(onClick = { vm.clearPattern(slot) }, enabled = !p.isEmpty, contentPadding = tight) { Text("Clear", maxLines = 1) }
+            OutlinedButton(onClick = onMove, contentPadding = tight) { Text("Move/copy…", maxLines = 1) }
         }
         MutedText("Plays in a loop with the samples on the pads right now - to recognise the pattern, not to reproduce the P-6: no filter, effects or knob motion.")
     }
@@ -493,13 +508,23 @@ private fun PadMap(vm: MainViewModel, project: Project, pattern: P6Pattern?, foc
 }
 
 @Composable
-private fun SlotPickerDialog(from: PatternSlot, pats: Map<PatternSlot, P6Pattern>, onDismiss: () -> Unit, onPick: (PatternSlot) -> Unit) {
+private fun SlotPickerDialog(
+    from: PatternSlot, pats: Map<PatternSlot, P6Pattern>, into: Boolean,
+    onDismiss: () -> Unit, onPick: (PatternSlot, copy: Boolean) -> Unit,
+) {
     var bank by remember { mutableIntStateOf(from.bank) }
+    var copy by remember { mutableStateOf(false) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Swap ${from.label} with") },
+        title = { Text(when {
+            !copy -> "Swap ${from.label} with"
+            into -> "Copy into ${from.label} from"
+            else -> "Copy ${from.label} to"
+        }) },
         text = {
             Column {
+                SwapCopyToggle(copy, { copy = it }, swapLabel = if (into) "Move" else "Swap")
+                Spacer(Modifier.height(8.dp))
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
                     (1..4).forEach { b -> SegmentedButton(colors = io.github.pyp6.app.ui.components.segColors(), icon = {}, selected = bank == b, onClick = { bank = b }, shape = SegmentedButtonDefaults.itemShape(b - 1, 4)) { Text("$b") } }
                 }
@@ -507,13 +532,18 @@ private fun SlotPickerDialog(from: PatternSlot, pats: Map<PatternSlot, P6Pattern
                 for (r in 0 until 4) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (c in 0 until 4) {
                         val s = PatternSlot(bank, r * 4 + c + 1)
-                        OutlinedButton(onClick = { onPick(s) }, enabled = s != from, modifier = Modifier.weight(1f),
+                        OutlinedButton(onClick = { onPick(s, copy) }, enabled = s != from && !(copy && into && pats[s] == null),
+                            modifier = Modifier.weight(1f),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
                             Text(s.number.toString().padStart(2, '0'), fontWeight = if (pats[s] != null) FontWeight.Bold else FontWeight.Normal)
                         }
                     }
                 }
-                MutedText("Bold slots hold a pattern; picking an empty one moves it.", Modifier.padding(top = 8.dp))
+                MutedText(when {
+                    !copy -> "Bold slots hold a pattern; picking an empty one moves it."
+                    into -> "Pick the pattern to copy into ${from.label}. Undo brings the slot back."
+                    else -> "The slot you pick gets a copy of ${from.label}, replacing what is there. Undo brings it back."
+                }, Modifier.padding(top = 8.dp))
             }
         },
         confirmButton = {},
