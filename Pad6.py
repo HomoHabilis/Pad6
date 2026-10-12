@@ -11371,7 +11371,10 @@ class CopyBanksDialog(tk.Toplevel):
         total_panel.pack(fill="x", pady=(0, 12))
         self.total_label = tk.Label(total_panel.body, text="", anchor="w")
         style_label(self.total_label, bg=BG_PANEL, font=ui_font(11))
-        self.total_label.pack(fill="x", pady=(8, 8))
+        self.total_label.pack(side="left", pady=(8, 8))
+        self.total_warning = tk.Label(total_panel.body, text="", anchor="w")
+        style_label(self.total_warning, bg=BG_PANEL, fg=ACCENT_RED, font=ui_font(9))
+        self.total_warning.pack(side="left", padx=(10, 0), pady=(8, 8))
 
         btn_row = tk.Frame(outer, bg=BG_DARK)
         btn_row.pack(fill="x", side="bottom")
@@ -11401,14 +11404,18 @@ class CopyBanksDialog(tk.Toplevel):
         mb = total_bytes / (1024 * 1024)
         limit_mb = MAX_UPLOAD_BYTES / (1024 * 1024)
         over = total_bytes > MAX_UPLOAD_BYTES
-        color = ACCENT_RED if over else FG_TEXT
         n = len(banks)
         bank_word = "bank" if n == 1 else "banks"
         self.total_label.config(
-            text=f"{mb:.2f} MB across {n} {bank_word}" + (f"  (over {limit_mb:.0f} MB!)" if over else ""),
-            fg=color)
+            text=f"{mb:.2f} MB across {n} {bank_word}",
+            fg=ACCENT_RED if over else FG_TEXT,
+            font=ui_font(11, "bold") if over else ui_font(11))
+        # The P-6 fails some files of an upload past its limit, so Copy is
+        # not offered at all rather than starting a transfer that breaks.
+        self.total_warning.config(
+            text=f"Over the {limit_mb:.0f} MB upload limit: untick some banks." if over else "")
         if hasattr(self, "copy_btn"):
-            self.copy_btn.config_state("normal" if banks else "disabled")
+            self.copy_btn.config_state("normal" if banks and not over else "disabled")
 
     def _safe_grab(self, attempt=0):
         try:
@@ -33249,25 +33256,6 @@ class P6ManagerApp:
         except Exception as _e:
             _swallowed(_e, "P6ManagerApp._set_busy")
 
-    def _confirm_if_over_limit(self, banks):
-        """The storage warning is otherwise only a passive display - ask for
-        confirmation at the moment it actually matters, i.e. right before
-        writing to the device."""
-        over = []
-        for bank in banks:
-            size = self._bank_size_bytes(bank)
-            if size > MAX_UPLOAD_BYTES:
-                over.append((bank, size / (1024 * 1024)))
-        if not over:
-            return True
-        limit_mb = MAX_UPLOAD_BYTES / (1024 * 1024)
-        details = "\n".join(f"  Bank {b}: {mb:.2f} MB" for b, mb in over)
-        return dark_askyesno(
-            "Storage Limit Exceeded",
-            f"The following exceed the {limit_mb:.0f} MB limit:\n\n{details}\n\n"
-            "Copy anyway?"
-        )
-
     def open_import_bank_dialog(self):
         self._save_active_bank_state()
         ImportBankDialog(self.root, self)
@@ -33280,8 +33268,6 @@ class P6ManagerApp:
             return
         banks = dialog.selected_banks()
         if not banks:
-            return
-        if not self._confirm_if_over_limit(banks):
             return
 
         # Only ask when there's actually something to carry over. The .PRM
