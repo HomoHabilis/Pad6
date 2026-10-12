@@ -48,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.pyp6.app.ui.MainViewModel
@@ -91,7 +92,6 @@ fun DeviceScreen(vm: MainViewModel, nav: Nav) {
     var includePrm by remember { mutableStateOf(settings.includePrm) }
     var importTarget by remember { mutableStateOf(currentBank) }
     var wipeCount by remember { mutableStateOf<Int?>(null) }
-    var confirmSend by remember { mutableStateOf(false) }
     val folderImport = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { it?.let { u -> vm.importBank(importTarget, u) } }
 
     LaunchedEffect(Unit) { vm.refreshDevice() }
@@ -135,14 +135,22 @@ fun DeviceScreen(vm: MainViewModel, nav: Nav) {
                 }
                 val total = sendBanks.sumOf { bytes[it] ?: 0L }
                 val limit = settings.storageWarningMb * 1024L * 1024L
-                val over = sendBanks.filter { (bytes[it] ?: 0L) > limit }
-                Text("Total ${formatBytes(total)}", style = MaterialTheme.typography.bodyMedium,
-                    color = if (over.isNotEmpty()) LocalPyP6Colors.current.over else MaterialTheme.colorScheme.onSurface)
-                if (over.isNotEmpty()) MutedText("Bank ${over.joinToString(", ")} exceed${if (over.size == 1) "s" else ""} the ${settings.storageWarningMb} MB per-upload limit.")
+                // The P-6 drops files past its per-upload limit, so a transfer over it is not started at all.
+                val overLimit = total > limit
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Total ${formatBytes(total)}", style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (overLimit) FontWeight.Bold else null,
+                        color = if (overLimit) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                    if (overLimit) {
+                        Spacer(Modifier.width(8.dp))
+                        Text("Over the ${settings.storageWarningMb} MB upload limit: untick some banks.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.weight(1f))
+                    }
+                }
                 SwitchRow("Include P-6 settings (.PRM)", includePrm, { includePrm = it },
                     supporting = "Send the pad settings imported from the device along, where they still match the audio")
-                Button(onClick = { if (over.isNotEmpty()) confirmSend = true else vm.sendBanks(sendBanks.toList(), includePrm) },
-                    enabled = device.hasImport && sendBanks.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                Button(onClick = { vm.sendBanks(sendBanks.toList(), includePrm) },
+                    enabled = device.hasImport && sendBanks.isNotEmpty() && !overLimit, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Default.Upload, null); Spacer(Modifier.width(8.dp)); Text("Send ${sendBanks.size} bank${if (sendBanks.size != 1) "s" else ""}")
                 }
                 if (!device.hasImport) MutedText(if (device.reachable) "The drive has no IMPORT folder: start the P-6 in storage mode (hold REC while switching on)."
@@ -184,10 +192,6 @@ fun DeviceScreen(vm: MainViewModel, nav: Nav) {
         }
     }
 
-    if (confirmSend) ConfirmDialog(
-        "Over the size limit", "Some banks exceed the ${settings.storageWarningMb} MB limit per upload. Send anyway?", "Send",
-        onDismiss = { confirmSend = false }, onConfirm = { vm.sendBanks(sendBanks.toList(), includePrm) },
-    )
     wipeCount?.let { n ->
         if (n <= 0) {
             vm.message(if (n == 0) "The IMPORT folder is empty." else "The IMPORT folder cannot be read.")
